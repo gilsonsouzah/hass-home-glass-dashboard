@@ -654,6 +654,7 @@ export class HomeHeader {
   private processSetHass(hass: any) {
     RTLHelper.initialize(hass);
     syncColorScheme(hass);
+    this.applySolidSurfacesSetting();
 
     // Special pages (room, scenes, cameras) keep their own titles.
     if (!this.currentConfig.isGroupPage && !this.currentConfig.isSpecialPage && hass?.config?.location_name) {
