@@ -53,7 +53,7 @@ const HVAC_FALLBACK: Record<string, string> = {
   off: 'Off',
   heat: 'Heat',
   cool: 'Cool',
-  heat_cool: 'Auto',
+  heat_cool: 'Heat/Cool',
   auto: 'Auto',
   dry: 'Dry',
   fan_only: 'Fan',
