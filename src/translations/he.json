@@ -122,9 +122,6 @@
     "visible": "גלוי",
     "hidden": "מוסתר"
   },
-  "ui": {
-    "done": "סיום"
-  },
   "section_titles": {
     "default_room": "חדר עיקרי",
     "favorites": "מועדפים",
@@ -150,7 +147,8 @@
     "ocean": "אוקיינוס",
     "forest": "יער",
     "purple": "סגול",
-    "fire": "אש"
+    "fire": "אש",
+    "dynamic": "דינמי"
   },
   "pages": {
     "scenes": "תרחישים",
@@ -326,5 +324,74 @@
       "windy-variant": "סוער",
       "exceptional": "חריג"
     }
+  },
+  "quick_controls": {
+    "details": "פרטים",
+    "open_details": "פתיחת פרטים",
+    "close": "סגירה",
+    "brightness": "בהירות",
+    "color_temperature": "טמפרטורת צבע",
+    "colors": "צבעים",
+    "color": {
+      "red": "אדום",
+      "orange": "כתום",
+      "yellow": "צהוב",
+      "green": "ירוק",
+      "blue": "כחול",
+      "purple": "סגול",
+      "pink": "ורוד"
+    },
+    "position": "מיקום",
+    "open": "פתיחה",
+    "stop": "עצירה",
+    "cover_close": "סגירה",
+    "speed": "מהירות",
+    "oscillate": "תנודה",
+    "target_temperature": "טמפרטורת יעד",
+    "decrease": "הפחתה",
+    "increase": "הגברה",
+    "hvac_mode": "מצב",
+    "hvac": {
+      "off": "כבוי",
+      "heat": "חימום",
+      "cool": "קירור",
+      "heat_cool": "חימום/קירור",
+      "auto": "אוטומטי",
+      "dry": "ייבוש",
+      "fan_only": "מאוורר"
+    },
+    "volume": "עוצמת שמע",
+    "previous": "הקודם",
+    "play": "ניגון",
+    "pause": "השהיה",
+    "next": "הבא"
+  },
+  "wallpaper_phases": {
+    "night": "לילה",
+    "dawn": "שחר",
+    "morning": "בוקר",
+    "day": "יום",
+    "golden": "שעת הזהב",
+    "dusk": "דמדומים"
+  },
+  "summary": {
+    "label": "סיכום הבית",
+    "alarm_triggered": "אזעקה הופעלה",
+    "leak_detected": "זוהתה נזילה",
+    "smoke_detected": "זוהה עשן",
+    "gas_detected": "זוהה גז",
+    "co_detected": "זוהה פחמן חד-חמצני",
+    "lock_unavailable": "המנעול אינו זמין",
+    "lock_unlocked_named": "לא נעול: {name}",
+    "locks_unlocked": "{n} מנעולים לא נעולים",
+    "open_named": "פתוח: {name}",
+    "garage_open": "{n} שערים ודלתות מוסך פתוחים",
+    "doors_open": "{n} דלתות פתוחות",
+    "windows_open": "{n} חלונות פתוחים",
+    "openings_open": "{n} דלתות וחלונות פתוחים",
+    "lights_on_one": "{n} אור דולק",
+    "lights_on_other": "{n} אורות דולקים",
+    "media_named": "מנגן: {name}",
+    "media_playing": "{n} נגני מדיה מנגנים"
   }
 }

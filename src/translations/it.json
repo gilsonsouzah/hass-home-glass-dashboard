@@ -122,9 +122,6 @@
     "visible": "Visibile",
     "hidden": "Nascosto"
   },
-  "ui": {
-    "done": "Fatto"
-  },
   "section_titles": {
     "default_room": "Stanza Predefinita",
     "favorites": "Preferiti",
@@ -150,7 +147,8 @@
     "ocean": "Oceano",
     "forest": "Foresta",
     "purple": "Viola",
-    "fire": "Fuoco"
+    "fire": "Fuoco",
+    "dynamic": "Dinamico"
   },
   "pages": {
     "scenes": "Scene",
@@ -326,5 +324,74 @@
       "windy-variant": "Ventoso",
       "exceptional": "Eccezionale"
     }
+  },
+  "quick_controls": {
+    "details": "Dettagli",
+    "open_details": "Apri dettagli",
+    "close": "Chiudi",
+    "brightness": "Luminosità",
+    "color_temperature": "Temperatura colore",
+    "colors": "Colori",
+    "color": {
+      "red": "Rosso",
+      "orange": "Arancione",
+      "yellow": "Giallo",
+      "green": "Verde",
+      "blue": "Blu",
+      "purple": "Viola",
+      "pink": "Rosa"
+    },
+    "position": "Posizione",
+    "open": "Apri",
+    "stop": "Stop",
+    "cover_close": "Chiudi",
+    "speed": "Velocità",
+    "oscillate": "Oscillazione",
+    "target_temperature": "Temperatura target",
+    "decrease": "Diminuisci",
+    "increase": "Aumenta",
+    "hvac_mode": "Modalità",
+    "hvac": {
+      "off": "Spento",
+      "heat": "Caldo",
+      "cool": "Freddo",
+      "heat_cool": "Caldo/Freddo",
+      "auto": "Auto",
+      "dry": "Deumidifica",
+      "fan_only": "Ventola"
+    },
+    "volume": "Volume",
+    "previous": "Precedente",
+    "play": "Riproduci",
+    "pause": "Pausa",
+    "next": "Successivo"
+  },
+  "wallpaper_phases": {
+    "night": "Notte",
+    "dawn": "Alba",
+    "morning": "Mattina",
+    "day": "Giorno",
+    "golden": "Ora d'oro",
+    "dusk": "Crepuscolo"
+  },
+  "summary": {
+    "label": "Riepilogo casa",
+    "alarm_triggered": "Allarme scattato",
+    "leak_detected": "Perdita rilevata",
+    "smoke_detected": "Fumo rilevato",
+    "gas_detected": "Gas rilevato",
+    "co_detected": "Monossido di carbonio rilevato",
+    "lock_unavailable": "Serratura non disponibile",
+    "lock_unlocked_named": "Serratura sbloccata: {name}",
+    "locks_unlocked": "{n} serrature sbloccate",
+    "open_named": "Aperto: {name}",
+    "garage_open": "{n} porte garage e cancelli aperti",
+    "doors_open": "{n} porte aperte",
+    "windows_open": "{n} finestre aperte",
+    "openings_open": "{n} porte e finestre aperte",
+    "lights_on_one": "{n} luce accesa",
+    "lights_on_other": "{n} luci accese",
+    "media_named": "In riproduzione: {name}",
+    "media_playing": "{n} lettori multimediali in riproduzione"
   }
 }

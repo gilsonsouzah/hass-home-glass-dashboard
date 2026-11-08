@@ -122,9 +122,6 @@
     "visible": "Visible",
     "hidden": "Masqué"
   },
-  "ui": {
-    "done": "Terminé"
-  },
   "section_titles": {
     "default_room": "Pièce par Défaut",
     "favorites": "Favoris",
@@ -150,7 +147,8 @@
     "ocean": "Océan",
     "forest": "Forêt",
     "purple": "Violet",
-    "fire": "Feu"
+    "fire": "Feu",
+    "dynamic": "Dynamique"
   },
   "pages": {
     "scenes": "Scènes",
@@ -326,5 +324,74 @@
       "windy-variant": "Venteux",
       "exceptional": "Exceptionnel"
     }
+  },
+  "quick_controls": {
+    "details": "Détails",
+    "open_details": "Ouvrir les détails",
+    "close": "Fermer",
+    "brightness": "Luminosité",
+    "color_temperature": "Température de couleur",
+    "colors": "Couleurs",
+    "color": {
+      "red": "Rouge",
+      "orange": "Orange",
+      "yellow": "Jaune",
+      "green": "Vert",
+      "blue": "Bleu",
+      "purple": "Violet",
+      "pink": "Rose"
+    },
+    "position": "Position",
+    "open": "Ouvrir",
+    "stop": "Arrêter",
+    "cover_close": "Fermer",
+    "speed": "Vitesse",
+    "oscillate": "Oscillation",
+    "target_temperature": "Température cible",
+    "decrease": "Diminuer",
+    "increase": "Augmenter",
+    "hvac_mode": "Mode",
+    "hvac": {
+      "off": "Arrêt",
+      "heat": "Chauffage",
+      "cool": "Climatisation",
+      "heat_cool": "Chaud/Froid",
+      "auto": "Auto",
+      "dry": "Déshumidification",
+      "fan_only": "Ventilation"
+    },
+    "volume": "Volume",
+    "previous": "Précédent",
+    "play": "Lecture",
+    "pause": "Pause",
+    "next": "Suivant"
+  },
+  "wallpaper_phases": {
+    "night": "Nuit",
+    "dawn": "Aube",
+    "morning": "Matin",
+    "day": "Jour",
+    "golden": "Heure dorée",
+    "dusk": "Crépuscule"
+  },
+  "summary": {
+    "label": "Résumé de la maison",
+    "alarm_triggered": "Alarme déclenchée",
+    "leak_detected": "Fuite détectée",
+    "smoke_detected": "Fumée détectée",
+    "gas_detected": "Gaz détecté",
+    "co_detected": "Monoxyde de carbone détecté",
+    "lock_unavailable": "Serrure indisponible",
+    "lock_unlocked_named": "Serrure déverrouillée : {name}",
+    "locks_unlocked": "{n} serrures déverrouillées",
+    "open_named": "Ouvert : {name}",
+    "garage_open": "{n} portes de garage et portails ouverts",
+    "doors_open": "{n} portes ouvertes",
+    "windows_open": "{n} fenêtres ouvertes",
+    "openings_open": "{n} portes et fenêtres ouvertes",
+    "lights_on_one": "{n} lumière allumée",
+    "lights_on_other": "{n} lumières allumées",
+    "media_named": "Lecture : {name}",
+    "media_playing": "{n} lecteurs multimédias en lecture"
   }
 }

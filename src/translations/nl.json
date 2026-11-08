@@ -122,9 +122,6 @@
     "visible": "Zichtbaar",
     "hidden": "Verborgen"
   },
-  "ui": {
-    "done": "Klaar"
-  },
   "section_titles": {
     "default_room": "Standaard Kamer",
     "favorites": "Favorieten",
@@ -150,7 +147,8 @@
     "ocean": "Oceaan",
     "forest": "Bos",
     "purple": "Paars",
-    "fire": "Vuur"
+    "fire": "Vuur",
+    "dynamic": "Dynamisch"
   },
   "pages": {
     "scenes": "Scènes",
@@ -326,5 +324,74 @@
       "windy-variant": "Winderig",
       "exceptional": "Uitzonderlijk"
     }
+  },
+  "quick_controls": {
+    "details": "Details",
+    "open_details": "Details openen",
+    "close": "Sluiten",
+    "brightness": "Helderheid",
+    "color_temperature": "Kleurtemperatuur",
+    "colors": "Kleuren",
+    "color": {
+      "red": "Rood",
+      "orange": "Oranje",
+      "yellow": "Geel",
+      "green": "Groen",
+      "blue": "Blauw",
+      "purple": "Paars",
+      "pink": "Roze"
+    },
+    "position": "Positie",
+    "open": "Openen",
+    "stop": "Stop",
+    "cover_close": "Sluiten",
+    "speed": "Snelheid",
+    "oscillate": "Oscilleren",
+    "target_temperature": "Doeltemperatuur",
+    "decrease": "Verlagen",
+    "increase": "Verhogen",
+    "hvac_mode": "Modus",
+    "hvac": {
+      "off": "Uit",
+      "heat": "Verwarmen",
+      "cool": "Koelen",
+      "heat_cool": "Verwarmen/Koelen",
+      "auto": "Auto",
+      "dry": "Drogen",
+      "fan_only": "Ventilator"
+    },
+    "volume": "Volume",
+    "previous": "Vorige",
+    "play": "Afspelen",
+    "pause": "Pauzeren",
+    "next": "Volgende"
+  },
+  "wallpaper_phases": {
+    "night": "Nacht",
+    "dawn": "Ochtendgloren",
+    "morning": "Ochtend",
+    "day": "Dag",
+    "golden": "Gouden uur",
+    "dusk": "Schemering"
+  },
+  "summary": {
+    "label": "Huisoverzicht",
+    "alarm_triggered": "Alarm afgegaan",
+    "leak_detected": "Lekkage gedetecteerd",
+    "smoke_detected": "Rook gedetecteerd",
+    "gas_detected": "Gas gedetecteerd",
+    "co_detected": "Koolmonoxide gedetecteerd",
+    "lock_unavailable": "Slot niet beschikbaar",
+    "lock_unlocked_named": "Ontgrendeld: {name}",
+    "locks_unlocked": "{n} sloten ontgrendeld",
+    "open_named": "Open: {name}",
+    "garage_open": "{n} garagedeuren en poorten open",
+    "doors_open": "{n} deuren open",
+    "windows_open": "{n} ramen open",
+    "openings_open": "{n} deuren en ramen open",
+    "lights_on_one": "{n} lamp aan",
+    "lights_on_other": "{n} lampen aan",
+    "media_named": "Speelt af: {name}",
+    "media_playing": "{n} mediaspelers spelen af"
   }
 }

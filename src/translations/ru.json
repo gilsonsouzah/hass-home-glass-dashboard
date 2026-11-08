@@ -122,9 +122,6 @@
     "visible": "Видимый",
     "hidden": "Скрытый"
   },
-  "ui": {
-    "done": "Готово"
-  },
   "section_titles": {
     "default_room": "Комната по Умолчанию",
     "favorites": "Избранное",
@@ -150,7 +147,8 @@
     "ocean": "Океан",
     "forest": "Лес",
     "purple": "Фиолетовый",
-    "fire": "Огонь"
+    "fire": "Огонь",
+    "dynamic": "Динамика"
   },
   "pages": {
     "scenes": "Сцены",
@@ -326,5 +324,74 @@
       "windy-variant": "Ветрено",
       "exceptional": "Исключительно"
     }
+  },
+  "quick_controls": {
+    "details": "Подробности",
+    "open_details": "Открыть подробности",
+    "close": "Закрыть",
+    "brightness": "Яркость",
+    "color_temperature": "Цветовая температура",
+    "colors": "Цвета",
+    "color": {
+      "red": "Красный",
+      "orange": "Оранжевый",
+      "yellow": "Жёлтый",
+      "green": "Зелёный",
+      "blue": "Синий",
+      "purple": "Фиолетовый",
+      "pink": "Розовый"
+    },
+    "position": "Положение",
+    "open": "Открыть",
+    "stop": "Стоп",
+    "cover_close": "Закрыть",
+    "speed": "Скорость",
+    "oscillate": "Качание",
+    "target_temperature": "Целевая температура",
+    "decrease": "Уменьшить",
+    "increase": "Увеличить",
+    "hvac_mode": "Режим",
+    "hvac": {
+      "off": "Выкл.",
+      "heat": "Обогрев",
+      "cool": "Охлаждение",
+      "heat_cool": "Обогрев/охлаждение",
+      "auto": "Авто",
+      "dry": "Осушение",
+      "fan_only": "Вентилятор"
+    },
+    "volume": "Громкость",
+    "previous": "Назад",
+    "play": "Воспроизвести",
+    "pause": "Пауза",
+    "next": "Далее"
+  },
+  "wallpaper_phases": {
+    "night": "Ночь",
+    "dawn": "Рассвет",
+    "morning": "Утро",
+    "day": "День",
+    "golden": "Золотой час",
+    "dusk": "Сумерки"
+  },
+  "summary": {
+    "label": "Сводка по дому",
+    "alarm_triggered": "Сработала сигнализация",
+    "leak_detected": "Обнаружена протечка",
+    "smoke_detected": "Обнаружен дым",
+    "gas_detected": "Обнаружен газ",
+    "co_detected": "Обнаружен угарный газ",
+    "lock_unavailable": "Замок недоступен",
+    "lock_unlocked_named": "Отперто: {name}",
+    "locks_unlocked": "Отперто замков: {n}",
+    "open_named": "Открыто: {name}",
+    "garage_open": "Открыто ворот и гаражей: {n}",
+    "doors_open": "Открыто дверей: {n}",
+    "windows_open": "Открыто окон: {n}",
+    "openings_open": "Открыто дверей и окон: {n}",
+    "lights_on_one": "Включён {n} светильник",
+    "lights_on_other": "Включено светильников: {n}",
+    "media_named": "Воспроизводится: {name}",
+    "media_playing": "Медиаплееры воспроизводят: {n}"
   }
 }

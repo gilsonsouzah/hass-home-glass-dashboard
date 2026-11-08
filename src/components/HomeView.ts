@@ -13,6 +13,7 @@ import { CamerasPage } from '../pages/CamerasPage';
 import { DeviceGroup } from '../config/DashboardConfig';
 import { RegistrySubscriptionManager, RegistryChangeCallback, RegistryChangeEvent } from '../utils/RegistrySubscriptionManager';
 import { syncColorScheme } from '../styles/tokens';
+import { BackgroundManager } from '../utils/BackgroundManager';
 import { escapeHtml } from '../utils/html';
 import { liquidGlassCSS } from '../utils/LiquidGlassStyles';
 import { VIEW_STYLES } from './view/styles';
@@ -26,7 +27,7 @@ import { getActivePage, renderActivePage, ViewPages } from './view/renderActiveP
 import { handleEntityChange, handleAreaChange, applyHomeCustomizationDiff } from './view/domUpdates';
 
 const RENDER_THROTTLE_MS = 500;
-const PERMANENT_CHROME = '.hg-header, .permanent-chips, .apple-page-title, .hg-state-message';
+const PERMANENT_CHROME = '.hg-header, .permanent-chips, .apple-page-title, .hg-state-message, .hg-home-summary';
 
 export class HomeView extends HTMLElement {
   private config?: any;
@@ -304,6 +305,7 @@ export class HomeView extends HTMLElement {
 
     setupLocalize(hass);
     if (oldHass?.themes?.darkMode !== hass?.themes?.darkMode) syncColorScheme(hass);
+    if (oldHass?.states?.['sun.sun'] !== hass?.states?.['sun.sun']) BackgroundManager.updateHass(hass);
 
     this.customizationManager.setHass(hass);
     this.appleHeader.setHass(hass);

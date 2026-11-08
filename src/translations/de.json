@@ -122,9 +122,6 @@
     "visible": "Sichtbar",
     "hidden": "Versteckt"
   },
-  "ui": {
-    "done": "Fertig"
-  },
   "section_titles": {
     "default_room": "Standard Raum",
     "favorites": "Favoriten",
@@ -150,7 +147,8 @@
     "ocean": "Ozean",
     "forest": "Wald",
     "purple": "Lila",
-    "fire": "Feuer"
+    "fire": "Feuer",
+    "dynamic": "Dynamisch"
   },
   "pages": {
     "scenes": "Szenen",
@@ -326,5 +324,74 @@
       "windy-variant": "Windig",
       "exceptional": "Außergewöhnlich"
     }
+  },
+  "quick_controls": {
+    "details": "Details",
+    "open_details": "Details öffnen",
+    "close": "Schließen",
+    "brightness": "Helligkeit",
+    "color_temperature": "Farbtemperatur",
+    "colors": "Farben",
+    "color": {
+      "red": "Rot",
+      "orange": "Orange",
+      "yellow": "Gelb",
+      "green": "Grün",
+      "blue": "Blau",
+      "purple": "Lila",
+      "pink": "Rosa"
+    },
+    "position": "Position",
+    "open": "Öffnen",
+    "stop": "Stopp",
+    "cover_close": "Schließen",
+    "speed": "Geschwindigkeit",
+    "oscillate": "Oszillieren",
+    "target_temperature": "Zieltemperatur",
+    "decrease": "Verringern",
+    "increase": "Erhöhen",
+    "hvac_mode": "Modus",
+    "hvac": {
+      "off": "Aus",
+      "heat": "Heizen",
+      "cool": "Kühlen",
+      "heat_cool": "Heizen/Kühlen",
+      "auto": "Auto",
+      "dry": "Trocknen",
+      "fan_only": "Lüften"
+    },
+    "volume": "Lautstärke",
+    "previous": "Zurück",
+    "play": "Abspielen",
+    "pause": "Pause",
+    "next": "Weiter"
+  },
+  "wallpaper_phases": {
+    "night": "Nacht",
+    "dawn": "Morgendämmerung",
+    "morning": "Morgen",
+    "day": "Tag",
+    "golden": "Goldene Stunde",
+    "dusk": "Abenddämmerung"
+  },
+  "summary": {
+    "label": "Hausübersicht",
+    "alarm_triggered": "Alarm ausgelöst",
+    "leak_detected": "Leck erkannt",
+    "smoke_detected": "Rauch erkannt",
+    "gas_detected": "Gas erkannt",
+    "co_detected": "Kohlenmonoxid erkannt",
+    "lock_unavailable": "Schloss nicht verfügbar",
+    "lock_unlocked_named": "Entriegelt: {name}",
+    "locks_unlocked": "{n} Schlösser entriegelt",
+    "open_named": "Offen: {name}",
+    "garage_open": "{n} Garagentore und Tore offen",
+    "doors_open": "{n} Türen offen",
+    "windows_open": "{n} Fenster offen",
+    "openings_open": "{n} Türen und Fenster offen",
+    "lights_on_one": "{n} Licht an",
+    "lights_on_other": "{n} Lichter an",
+    "media_named": "Wiedergabe: {name}",
+    "media_playing": "{n} Mediaplayer spielen"
   }
 }

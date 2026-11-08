@@ -147,7 +147,8 @@
     "ocean": "Ocean",
     "forest": "Forest",
     "purple": "Purple",
-    "fire": "Fire"
+    "fire": "Fire",
+    "dynamic": "Dynamic"
   },
   "pages": {
     "scenes": "Scenes",
@@ -323,5 +324,74 @@
       "windy-variant": "Windy",
       "exceptional": "Exceptional"
     }
+  },
+  "quick_controls": {
+    "details": "Details",
+    "open_details": "Open details",
+    "close": "Close",
+    "brightness": "Brightness",
+    "color_temperature": "Color temperature",
+    "colors": "Colors",
+    "color": {
+      "red": "Red",
+      "orange": "Orange",
+      "yellow": "Yellow",
+      "green": "Green",
+      "blue": "Blue",
+      "purple": "Purple",
+      "pink": "Pink"
+    },
+    "position": "Position",
+    "open": "Open",
+    "stop": "Stop",
+    "cover_close": "Close",
+    "speed": "Speed",
+    "oscillate": "Oscillate",
+    "target_temperature": "Target temperature",
+    "decrease": "Decrease",
+    "increase": "Increase",
+    "hvac_mode": "Mode",
+    "hvac": {
+      "off": "Off",
+      "heat": "Heat",
+      "cool": "Cool",
+      "heat_cool": "Heat/Cool",
+      "auto": "Auto",
+      "dry": "Dry",
+      "fan_only": "Fan"
+    },
+    "volume": "Volume",
+    "previous": "Previous",
+    "play": "Play",
+    "pause": "Pause",
+    "next": "Next"
+  },
+  "wallpaper_phases": {
+    "night": "Night",
+    "dawn": "Dawn",
+    "morning": "Morning",
+    "day": "Day",
+    "golden": "Golden hour",
+    "dusk": "Dusk"
+  },
+  "summary": {
+    "label": "Home summary",
+    "alarm_triggered": "Alarm triggered",
+    "leak_detected": "Leak detected",
+    "smoke_detected": "Smoke detected",
+    "gas_detected": "Gas detected",
+    "co_detected": "Carbon monoxide detected",
+    "lock_unavailable": "Lock unavailable",
+    "lock_unlocked_named": "{name} unlocked",
+    "locks_unlocked": "{n} locks unlocked",
+    "open_named": "{name} open",
+    "garage_open": "{n} garage doors and gates open",
+    "doors_open": "{n} doors open",
+    "windows_open": "{n} windows open",
+    "openings_open": "{n} doors and windows open",
+    "lights_on_one": "{n} light on",
+    "lights_on_other": "{n} lights on",
+    "media_named": "{name} playing",
+    "media_playing": "{n} media players playing"
   }
 }

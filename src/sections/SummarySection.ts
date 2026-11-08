@@ -103,6 +103,9 @@ export class SummarySection {
   }
 
   private handleClick(event: Event): void {
+    // Edit mode rearranges sections; navigating away would drop pending changes. HomeView flags edit mode on its host.
+    const host = (this.root?.getRootNode() as ShadowRoot | undefined)?.host;
+    if (host?.classList.contains('edit-mode')) return;
     const button = (event.target as Element).closest<HTMLButtonElement>('button[data-id]');
     const item = this.items.find((candidate) => candidate.id === button?.dataset.id);
     if (!button || !item) return;

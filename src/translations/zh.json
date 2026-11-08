@@ -122,9 +122,6 @@
     "visible": "可见",
     "hidden": "隐藏"
   },
-  "ui": {
-    "done": "完成"
-  },
   "section_titles": {
     "default_room": "默认房间",
     "favorites": "收藏夹",
@@ -150,7 +147,8 @@
     "ocean": "海洋",
     "forest": "森林",
     "purple": "紫色",
-    "fire": "火焰"
+    "fire": "火焰",
+    "dynamic": "动态"
   },
   "pages": {
     "scenes": "场景",
@@ -326,5 +324,74 @@
       "windy-variant": "大风",
       "exceptional": "异常"
     }
+  },
+  "quick_controls": {
+    "details": "详情",
+    "open_details": "打开详情",
+    "close": "关闭",
+    "brightness": "亮度",
+    "color_temperature": "色温",
+    "colors": "颜色",
+    "color": {
+      "red": "红色",
+      "orange": "橙色",
+      "yellow": "黄色",
+      "green": "绿色",
+      "blue": "蓝色",
+      "purple": "紫色",
+      "pink": "粉色"
+    },
+    "position": "位置",
+    "open": "打开",
+    "stop": "停止",
+    "cover_close": "关闭",
+    "speed": "风速",
+    "oscillate": "摆动",
+    "target_temperature": "目标温度",
+    "decrease": "降低",
+    "increase": "升高",
+    "hvac_mode": "模式",
+    "hvac": {
+      "off": "关",
+      "heat": "制热",
+      "cool": "制冷",
+      "heat_cool": "制热/制冷",
+      "auto": "自动",
+      "dry": "除湿",
+      "fan_only": "送风"
+    },
+    "volume": "音量",
+    "previous": "上一首",
+    "play": "播放",
+    "pause": "暂停",
+    "next": "下一首"
+  },
+  "wallpaper_phases": {
+    "night": "夜晚",
+    "dawn": "黎明",
+    "morning": "早晨",
+    "day": "白天",
+    "golden": "黄金时刻",
+    "dusk": "黄昏"
+  },
+  "summary": {
+    "label": "家庭概览",
+    "alarm_triggered": "警报已触发",
+    "leak_detected": "检测到漏水",
+    "smoke_detected": "检测到烟雾",
+    "gas_detected": "检测到燃气",
+    "co_detected": "检测到一氧化碳",
+    "lock_unavailable": "门锁不可用",
+    "lock_unlocked_named": "已解锁：{name}",
+    "locks_unlocked": "{n} 个门锁已解锁",
+    "open_named": "已打开：{name}",
+    "garage_open": "{n} 个车库门和大门已打开",
+    "doors_open": "{n} 扇门已打开",
+    "windows_open": "{n} 扇窗已打开",
+    "openings_open": "{n} 扇门窗已打开",
+    "lights_on_one": "{n} 盏灯已开启",
+    "lights_on_other": "{n} 盏灯已开启",
+    "media_named": "正在播放：{name}",
+    "media_playing": "{n} 个媒体播放器正在播放"
   }
 }

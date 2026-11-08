@@ -122,9 +122,6 @@
     "visible": "Visible",
     "hidden": "Oculto"
   },
-  "ui": {
-    "done": "Hecho"
-  },
   "section_titles": {
     "default_room": "Habitación Predeterminada",
     "favorites": "Favoritos",
@@ -150,7 +147,8 @@
     "ocean": "Océano",
     "forest": "Bosque",
     "purple": "Morado",
-    "fire": "Fuego"
+    "fire": "Fuego",
+    "dynamic": "Dinámico"
   },
   "pages": {
     "scenes": "Escenas",
@@ -326,5 +324,74 @@
       "windy-variant": "Ventoso",
       "exceptional": "Excepcional"
     }
+  },
+  "quick_controls": {
+    "details": "Detalles",
+    "open_details": "Abrir detalles",
+    "close": "Cerrar",
+    "brightness": "Brillo",
+    "color_temperature": "Temperatura de color",
+    "colors": "Colores",
+    "color": {
+      "red": "Rojo",
+      "orange": "Naranja",
+      "yellow": "Amarillo",
+      "green": "Verde",
+      "blue": "Azul",
+      "purple": "Morado",
+      "pink": "Rosa"
+    },
+    "position": "Posición",
+    "open": "Abrir",
+    "stop": "Detener",
+    "cover_close": "Cerrar",
+    "speed": "Velocidad",
+    "oscillate": "Oscilar",
+    "target_temperature": "Temperatura objetivo",
+    "decrease": "Reducir",
+    "increase": "Aumentar",
+    "hvac_mode": "Modo",
+    "hvac": {
+      "off": "Apagado",
+      "heat": "Calor",
+      "cool": "Frío",
+      "heat_cool": "Calor/Frío",
+      "auto": "Automático",
+      "dry": "Deshumidificar",
+      "fan_only": "Ventilador"
+    },
+    "volume": "Volumen",
+    "previous": "Anterior",
+    "play": "Reproducir",
+    "pause": "Pausar",
+    "next": "Siguiente"
+  },
+  "wallpaper_phases": {
+    "night": "Noche",
+    "dawn": "Amanecer",
+    "morning": "Mañana",
+    "day": "Día",
+    "golden": "Hora dorada",
+    "dusk": "Atardecer"
+  },
+  "summary": {
+    "label": "Resumen del hogar",
+    "alarm_triggered": "Alarma disparada",
+    "leak_detected": "Fuga detectada",
+    "smoke_detected": "Humo detectado",
+    "gas_detected": "Gas detectado",
+    "co_detected": "Monóxido de carbono detectado",
+    "lock_unavailable": "Cerradura no disponible",
+    "lock_unlocked_named": "Cerradura abierta: {name}",
+    "locks_unlocked": "{n} cerraduras abiertas",
+    "open_named": "Abierto: {name}",
+    "garage_open": "{n} puertas de garaje y portones abiertos",
+    "doors_open": "{n} puertas abiertas",
+    "windows_open": "{n} ventanas abiertas",
+    "openings_open": "{n} puertas y ventanas abiertas",
+    "lights_on_one": "{n} luz encendida",
+    "lights_on_other": "{n} luces encendidas",
+    "media_named": "Reproduciendo: {name}",
+    "media_playing": "{n} reproductores multimedia en reproducción"
   }
 }
