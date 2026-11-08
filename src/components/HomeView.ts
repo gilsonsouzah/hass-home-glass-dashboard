@@ -74,7 +74,6 @@ export class HomeView extends HTMLElement {
       this.customizationManager
     );
     this.appleHeader.setEditModeManager(this.editModeManager);
-    this.appleHeader.addRefreshCallback(this.refreshCallback);
 
     this.dragAndDropManager = new DragAndDropManager(
       (areaId: string, grid?: HTMLElement) => this.handleSaveCurrentOrder(areaId, grid),
@@ -104,6 +103,9 @@ export class HomeView extends HTMLElement {
       }
     };
     document.addEventListener('hg-dashboard-refresh', this.globalRefreshHandler);
+
+    this.appleHeader.removeRefreshCallback(this.refreshCallback);
+    this.appleHeader.addRefreshCallback(this.refreshCallback);
 
     if (this.content) {
       this.cardRouter.observe(this.content);
