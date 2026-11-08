@@ -4,13 +4,15 @@ import { localize } from './LocalizationService';
 import { RTLHelper } from './RTLHelper';
 import { injectLiquidGlassStyles, LiquidGlassClasses } from './LiquidGlassStyles';
 import { EnergySection } from '../sections/EnergySection';
+import { DataService } from './DataService';
+import { escapeHtml } from './html';
+import { orderSections } from './sectionOrder';
 
 interface SectionItem {
   id: string;
   name: string;
   type: 'area' | 'scenes' | 'cameras' | 'favorites' | 'weather' | 'energy';
   visible: boolean;
-  order: number;
 }
 
 export class SectionReorderManager {
@@ -19,6 +21,7 @@ export class SectionReorderManager {
   private onSaveCallback: () => void;
   private sections: SectionItem[] = [];
   private sortableInstance?: Sortable;
+  private saving = false;
 
   constructor(customizationManager: CustomizationManager, onSaveCallback: () => void) {
     this.customizationManager = customizationManager;
@@ -26,6 +29,8 @@ export class SectionReorderManager {
   }
 
   public async showReorderModal(areas: any[], hass: any) {
+    if (this.modal) return;
+
     // Prepare sections data
     this.sections = await this.prepareSectionsData(areas, hass);
 
@@ -39,134 +44,50 @@ export class SectionReorderManager {
     const sections: SectionItem[] = [];
     const customizations = this.customizationManager.getCustomizations();
 
-    // Get current section order and visibility settings
-    const sectionOrder = customizations.home?.sections?.order || [];
-    const hiddenSections = customizations.home?.sections?.hidden || [];
+    const sectionOrder: string[] = customizations.home?.sections?.order || [];
+    const hiddenSections: string[] = customizations.home?.sections?.hidden || [];
+    const excluded = new Set(await this.customizationManager.getExcludedFromDashboard());
+    const add = (id: string, name: string, type: SectionItem['type']) =>
+      sections.push({ id, name, type, visible: !hiddenSections.includes(id) });
 
-    // Add Weather section if configured
     const weatherEntity = await this.customizationManager.getWeatherEntity();
     if (weatherEntity && hass.states[weatherEntity]) {
-      sections.push({
-        id: 'weather_section',
-        name: localize('section_titles.weather'),
-        type: 'weather',
-        visible: !hiddenSections.includes('weather_section'),
-        order: sectionOrder.indexOf('weather_section') !== -1 ? sectionOrder.indexOf('weather_section') : 0
-      });
+      add('weather_section', localize('section_titles.weather'), 'weather');
     }
 
-    const hasWeather = !!(weatherEntity && hass.states[weatherEntity]);
-
-    // Add Energy section if enabled and energy sensors exist
     const showEnergy = await this.customizationManager.getShowEnergy();
-    const hasEnergy = showEnergy && EnergySection.hasEnergySensors(hass);
-    if (hasEnergy) {
-      sections.push({
-        id: 'energy_section',
-        name: localize('section_titles.energy'),
-        type: 'energy',
-        visible: !hiddenSections.includes('energy_section'),
-        order: sectionOrder.indexOf('energy_section') !== -1 ? sectionOrder.indexOf('energy_section') : (hasWeather ? 1 : 0)
-      });
+    if (showEnergy && EnergySection.hasEnergySensors(hass)) {
+      add('energy_section', localize('section_titles.energy'), 'energy');
     }
 
-    // Add Cameras section (first in default order)
-    const cameraEntities = Object.values(hass.states).filter((state: any) => {
-      if (!state.entity_id.startsWith('camera.')) {
-        return false;
-      }
+    const hasVisible = (prefixes: string[]) =>
+      Object.keys(hass.states).some(
+        (entityId) =>
+          prefixes.some((prefix) => entityId.startsWith(prefix)) &&
+          !excluded.has(entityId) &&
+          DataService.isVisibleInRegistry(hass, entityId)
+      );
 
-      // Check if entity is hidden in the entity registry
-      const entityRegistry = hass.entities?.[state.entity_id];
-      if (entityRegistry && entityRegistry.hidden_by) {
-        return false;
-      }
+    if (hasVisible(['camera.'])) add('cameras_section', localize('section_titles.cameras'), 'cameras');
+    if (hasVisible(['scene.', 'script.'])) add('scenes_section', localize('section_titles.scenes'), 'scenes');
 
-      // Check if entity is disabled in the entity registry
-      if (entityRegistry && entityRegistry.disabled_by) {
-        return false;
-      }
-
-      return true;
-    });
-    if (cameraEntities.length > 0) {
-      sections.push({
-        id: 'cameras_section',
-        name: localize('section_titles.cameras'),
-        type: 'cameras',
-        visible: !hiddenSections.includes('cameras_section'),
-        order: sectionOrder.indexOf('cameras_section') !== -1 ? sectionOrder.indexOf('cameras_section') : (hasWeather ? 1 : 0) + (hasEnergy ? 1 : 0)
-      });
-    }
-
-    // Add Scenes section (second in default order)
-    const scenesEntities = Object.values(hass.states).filter((state: any) => {
-      if (!state.entity_id.startsWith('scene.') && !state.entity_id.startsWith('script.')) {
-        return false;
-      }
-
-      // Check if entity is hidden in the entity registry
-      const entityRegistry = hass.entities?.[state.entity_id];
-      if (entityRegistry && entityRegistry.hidden_by) {
-        return false;
-      }
-
-      // Check if entity is disabled in the entity registry
-      if (entityRegistry && entityRegistry.disabled_by) {
-        return false;
-      }
-
-      return true;
-    });
-
-    if (scenesEntities.length > 0) {
-      const baseOrder = (hasWeather ? 1 : 0) + (hasEnergy ? 1 : 0) + (cameraEntities.length > 0 ? 1 : 0);
-      sections.push({
-        id: 'scenes_section',
-        name: localize('section_titles.scenes'),
-        type: 'scenes',
-        visible: !hiddenSections.includes('scenes_section'),
-        order: sectionOrder.indexOf('scenes_section') !== -1 ? sectionOrder.indexOf('scenes_section') : baseOrder,
-      });
-    }
-
-    // Add Favorites section (third in default order)
     const favoriteAccessories = await this.customizationManager.getFavoriteAccessories();
-    if (favoriteAccessories.length > 0) {
-      const baseOrder = (hasWeather ? 1 : 0) + (hasEnergy ? 1 : 0) + (cameraEntities.length > 0 ? 1 : 0) + (scenesEntities.length > 0 ? 1 : 0);
-      sections.push({
-        id: 'favorites_section',
-        name: localize('section_titles.favorites'),
-        type: 'favorites',
-        visible: !hiddenSections.includes('favorites_section'),
-        order: sectionOrder.indexOf('favorites_section') !== -1 ? sectionOrder.indexOf('favorites_section') : baseOrder,
-      });
-    }
+    if (favoriteAccessories.length > 0) add('favorites_section', localize('section_titles.favorites'), 'favorites');
 
-    // Add area sections
-    areas.forEach((area, index) => {
+    const areaNames: Record<string, string> = {};
+    areas.forEach((area) => {
       const areaId = area.area_id || area.id;
-      const areaName = area.name || areaId;
-      const baseOrder = (hasWeather ? 1 : 0) +
-                       (hasEnergy ? 1 : 0) +
-        (cameraEntities.length > 0 ? 1 : 0) +
-        (scenesEntities.length > 0 ? 1 : 0) +
-        (favoriteAccessories.length > 0 ? 1 : 0) +
-        index;
-
-      sections.push({
-        id: areaId,
-        name: areaName,
-        type: 'area',
-        visible: !hiddenSections.includes(areaId),
-        order: sectionOrder.indexOf(areaId) !== -1 ? sectionOrder.indexOf(areaId) : baseOrder,
-      });
+      areaNames[areaId] = area.name || areaId;
+      add(areaId, areaNames[areaId], 'area');
     });
 
-    // Sort by current order
-    sections.sort((a, b) => a.order - b.order);
-
-    return sections;
+    const byId = new Map(sections.map((section) => [section.id, section]));
+    return orderSections(
+      sections.map((section) => section.id),
+      sectionOrder,
+      areaNames,
+      hass.locale?.language || hass.language
+    ).map((id) => byId.get(id)!);
   }
 
   private createModal() {
@@ -191,13 +112,13 @@ export class SectionReorderManager {
             ${this.sections
               .map(
                 (section, index) => `
-              <div class="section-item" data-section-id="${section.id}" data-index="${index}">
+              <div class="section-item" data-section-id="${escapeHtml(section.id)}" data-index="${index}">
                 <button class="section-visibility-toggle ${section.visible ? 'visible' : 'hidden'}"
-                        data-section-id="${section.id}">
+                        data-section-id="${escapeHtml(section.id)}">
                   <ha-icon icon="${section.visible ? 'mdi:eye' : 'mdi:eye-off'}"></ha-icon>
                 </button>
                 <div class="section-info">
-                  <span class="section-name">${section.name}</span>
+                  <span class="section-name">${escapeHtml(section.name)}</span>
                 </div>
                 <div class="section-drag-handle">
                   <ha-icon icon="mdi:menu"></ha-icon>
@@ -578,27 +499,11 @@ export class SectionReorderManager {
     const backdrop = this.modal.querySelector('.modal-backdrop');
     backdrop?.addEventListener('click', () => this.closeModal());
 
-    // Visibility toggles - use event delegation with both click and touchstart for better mobile support
+    // Visibility toggles - event delegation. No touchstart handler: it would fire when a scroll gesture starts on the button.
     const sectionsListEl = this.modal.querySelector('.sections-list');
 
-    // Handle click events
     sectionsListEl?.addEventListener(
       'click',
-      (e) => {
-        const target = e.target as HTMLElement;
-        const toggleButton = target.closest('.section-visibility-toggle');
-        if (toggleButton) {
-          e.preventDefault();
-          e.stopPropagation();
-          this.toggleSectionVisibility(toggleButton as HTMLElement);
-        }
-      },
-      { capture: true }
-    );
-
-    // Handle touch events for better mobile responsiveness
-    sectionsListEl?.addEventListener(
-      'touchstart',
       (e) => {
         const target = e.target as HTMLElement;
         const toggleButton = target.closest('.section-visibility-toggle');
@@ -675,11 +580,6 @@ export class SectionReorderManager {
     // Update internal sections array
     const movedSection = this.sections.splice(oldIndex, 1)[0];
     this.sections.splice(newIndex, 0, movedSection);
-
-    // Update order values
-    this.sections.forEach((section, index) => {
-      section.order = index;
-    });
   }
 
   private toggleSectionVisibility(button: HTMLElement) {
@@ -741,70 +641,49 @@ export class SectionReorderManager {
   }
 
   private closeModal() {
-    if (!this.modal) return;
+    this.detachModal();
+  }
 
-    // Restore background scrolling
+  /** Detaches the current modal now and removes its element after the fade, so a modal reopened meanwhile is untouched. */
+  private detachModal(afterRemove?: () => void) {
+    const modal = this.modal;
+    if (!modal) return;
+    this.modal = undefined;
+
     document.body.style.overflow = '';
-
-    // Clean up sortable instance
-    if (this.sortableInstance) {
-      this.sortableInstance.destroy();
-      this.sortableInstance = undefined;
-    }
-
-    this.modal.classList.remove('show');
+    document.removeEventListener('keydown', this.handleEscapeKey);
+    this.sortableInstance?.destroy();
+    this.sortableInstance = undefined;
+    modal.classList.remove('show');
 
     setTimeout(() => {
-      document.removeEventListener('keydown', this.handleEscapeKey);
-      if (this.modal && this.modal.parentNode) {
-        this.modal.parentNode.removeChild(this.modal);
-      }
-      this.modal = undefined;
+      modal.remove();
+      afterRemove?.();
     }, 300);
   }
 
   private async saveAndClose() {
-    // Show loading state immediately
-    if (this.modal) {
-      this.modal.classList.add('saving');
-    }
+    if (this.saving || !this.modal) return;
+    this.saving = true;
 
-    // Clean up sortable instance first
-    if (this.sortableInstance) {
-      this.sortableInstance.destroy();
-      this.sortableInstance = undefined;
-    }
+    this.modal.classList.add('saving');
+    this.modal.style.transition = 'opacity 0.3s ease-out';
+    this.modal.style.opacity = '0';
+    this.sortableInstance?.destroy();
+    this.sortableInstance = undefined;
 
-    // Start modal fade immediately (while save happens in parallel)
-    if (this.modal) {
-      this.modal.style.transition = 'opacity 0.3s ease-out';
-      this.modal.style.opacity = '0';
-    }
-
-    // Run save operation (this is the potentially slow part)
     try {
       await this.saveSectionConfiguration();
     } catch (error) {
       console.error('Error saving section configuration:', error);
     }
 
-    // Clean up modal after fade animation
-    setTimeout(() => {
-      // Restore background scrolling
-      document.body.style.overflow = '';
-
-      // Remove modal from DOM
-      document.removeEventListener('keydown', this.handleEscapeKey);
-      if (this.modal && this.modal.parentNode) {
-        this.modal.parentNode.removeChild(this.modal);
-      }
-      this.modal = undefined;
-
-      // Trigger callback to refresh the dashboard
-      if (this.onSaveCallback) {
-        this.onSaveCallback();
-      }
-    }, 300);
+    this.saving = false;
+    if (this.modal) {
+      this.detachModal(() => this.onSaveCallback?.());
+    } else {
+      this.onSaveCallback?.();
+    }
   }
 
   private async saveSectionConfiguration() {
