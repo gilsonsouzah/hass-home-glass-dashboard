@@ -181,6 +181,9 @@ function showLockCodeModal(hass: any, entityId: string, action: LockAction, code
     }
     if (e.key === 'Escape') {
       closeModal();
+    } else if (e.key === 'Enter' && isDigitKey(e.target)) {
+      e.preventDefault();
+      if (code.length > 0) handleConfirm();
     } else if (e.key === 'Enter' && code.length > 0 && !(e.target as Element | null)?.closest?.('button')) {
       handleConfirm();
     } else if (!format.numeric) {
@@ -193,6 +196,11 @@ function showLockCodeModal(hass: any, entityId: string, action: LockAction, code
       updateDisplay();
     }
   });
+}
+
+function isDigitKey(target: EventTarget | null): boolean {
+  const key = (target as Element | null)?.closest?.<HTMLElement>('.lock-code-key');
+  return /^\d$/.test(key?.dataset.key ?? '');
 }
 
 async function tryLockAction(hass: any, entityId: string, action: LockAction) {
