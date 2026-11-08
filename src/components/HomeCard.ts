@@ -516,9 +516,12 @@ export class HomeCard extends HTMLElement {
     } catch (error) {
       console.error('Failed to set temperature:', error);
     } finally {
-      this.pendingTarget = undefined;
-      // On success HA's state update already matches; on failure this restores the real target
-      this.updateCardInPlace();
+      // A tap made while the call was in flight owns pendingTarget now; its own commit will clear it
+      if (this.pendingTarget === temperature) {
+        this.pendingTarget = undefined;
+        // On success HA's state update already matches; on failure this restores the real target
+        this.updateCardInPlace();
+      }
     }
   }
 
