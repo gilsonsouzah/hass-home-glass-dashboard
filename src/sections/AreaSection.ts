@@ -3,8 +3,8 @@ import { CardManager } from '../utils/CardManager';
 import { DataService } from '../utils/DataService';
 import { Entity, CardConfig, Area } from '../types/types';
 import { DashboardConfig } from '../config/DashboardConfig';
-import { localize } from '../utils/LocalizationService';
 import { RTLHelper } from '../utils/RTLHelper';
+import { escapeHtml } from '../utils/html';
 
 export class AreaSection {
   private customizationManager: CustomizationManager;
@@ -56,7 +56,7 @@ export class AreaSection {
       // Create clickable wrapper for just the title text and chevron
       const clickableWrapper = document.createElement('div');
       clickableWrapper.className = 'clickable-section-title';
-      clickableWrapper.innerHTML = `<span>${areaName}</span><ha-icon icon="${RTLHelper.isRTL() ? 'mdi:chevron-left' : 'mdi:chevron-right'}" class="section-arrow"></ha-icon>`;
+      clickableWrapper.innerHTML = `<span>${escapeHtml(areaName)}</span><ha-icon icon="${RTLHelper.isRTL() ? 'mdi:chevron-left' : 'mdi:chevron-right'}" class="section-arrow"></ha-icon>`;
 
       // Add click handler to the wrapper
       clickableWrapper.addEventListener('click', () => {
@@ -65,7 +65,7 @@ export class AreaSection {
 
       titleDiv.appendChild(clickableWrapper);
     } else {
-      titleDiv.innerHTML = `<span>${areaName}</span>`;
+      titleDiv.innerHTML = `<span>${escapeHtml(areaName)}</span>`;
     }
 
     container.appendChild(titleDiv);
@@ -186,7 +186,7 @@ export class AreaSection {
           }
         } else {
           cardElement = document.createElement('div');
-          cardElement.innerHTML = `<div style="color: red;">Unknown card type: ${cardConfig.type}</div>`;
+          cardElement.innerHTML = `<div style="color: red;">Unknown card type: ${escapeHtml(cardConfig.type)}</div>`;
         }
       }
 
