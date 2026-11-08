@@ -1,4 +1,3 @@
-import { HomeCard } from './HomeCard';
 import { DragAndDropManager } from '../utils/DragAndDropManager';
 import { EditModeManager } from '../utils/EditModeManager';
 import { HomeHeader, HeaderConfig } from '../sections/HomeHeader';
@@ -16,7 +15,8 @@ import { CamerasPage } from '../pages/CamerasPage';
 import { DeviceGroup } from '../config/DashboardConfig';
 import { RegistrySubscriptionManager, RegistryChangeCallback, RegistryChangeEvent } from '../utils/RegistrySubscriptionManager';
 import { VIEW_STYLES } from './view/styles';
-import { isEntityHiddenOrDisabled, resolveEntityAreaId } from '../utils/registryDisplay';
+import { CardHassRouter } from './view/CardHassRouter';
+import { handleEntityChange, handleAreaChange, applyHomeCustomizationDiff } from './view/domUpdates';
 
 const RENDER_THROTTLE_MS = 500;
 
@@ -25,13 +25,7 @@ export class HomeView extends HTMLElement {
   private _hass?: any;
   private _config?: any;
   private content?: HTMLElement;
-  // Targeted event routing: entity_id -> cards that render it.
-  private entityCardIndex: Map<string, Set<HomeCard>> = new Map();
-  // Cards that must receive every hass update regardless of state diff (cameras).
-  private alwaysUpdateCards: Set<HomeCard> = new Set();
-  // Set true whenever this.content's card DOM changes; triggers a lazy index rebuild.
-  private indexDirty: boolean = true;
-  private contentMutationObserver?: MutationObserver;
+  private cardRouter = new CardHassRouter();
   private _rendered = false;
   private _isTransitioning = false; // Add transition state
   private _lastRenderTime = 0;
@@ -118,7 +112,7 @@ export class HomeView extends HTMLElement {
     };
     document.addEventListener('hg-dashboard-refresh', this.globalRefreshHandler);
     
-    if (this.content) this.setupContentMutationObserver();
+    if (this.content) this.cardRouter.observe(this.content);
 
     this.setupRegistrySubscriptions();
     
@@ -145,11 +139,7 @@ export class HomeView extends HTMLElement {
       this._pendingRender = undefined;
     }
 
-    // Stop watching content for card DOM changes
-    if (this.contentMutationObserver) {
-      this.contentMutationObserver.disconnect();
-      this.contentMutationObserver = undefined;
-    }
+    this.cardRouter.disconnect();
 
     // Clean up registry subscription handlers
     this.cleanupRegistrySubscriptions();
@@ -230,141 +220,16 @@ export class HomeView extends HTMLElement {
 
     switch (event.type) {
       case 'entity':
-        await this.handleEntityChange(event);
+        await handleEntityChange(this.content, this._hass, event);
         break;
       case 'area':
-        await this.handleAreaChange(event);
+        await handleAreaChange(this.content, this._hass, event);
         break;
       case 'device':
         // Device area changes affect entities on that device.
         // The entity registry events will fire separately for those, so no action needed here.
         break;
     }
-  }
-
-  private async handleEntityChange(event: RegistryChangeEvent): Promise<void> {
-    const entityId = event.data?.entity_id;
-    if (!entityId || !this.content || !this._hass) return;
-
-    if (event.action === 'remove') {
-      this.fadeOutCard(entityId);
-      return;
-    }
-
-    if (event.action === 'update') {
-      if (isEntityHiddenOrDisabled(this._hass, entityId)) {
-        this.fadeOutCard(entityId);
-        return;
-      }
-
-      const newAreaId = resolveEntityAreaId(this._hass, entityId);
-
-      const wrapper = this.content.querySelector(`.entity-card-wrapper[data-entity-id="${entityId}"]`) as HTMLElement;
-      if (wrapper) {
-        const currentGrid = wrapper.closest('.area-entities') as HTMLElement;
-        const currentAreaId = currentGrid?.dataset?.areaId;
-
-        if (currentAreaId && currentAreaId !== newAreaId) {
-          // Entity moved to a different area
-          const targetGrid = this.content.querySelector(`.area-entities[data-area-id="${newAreaId}"]`) as HTMLElement;
-          if (targetGrid) {
-            // Move card to the target area grid
-            wrapper.style.transition = 'opacity 0.2s ease';
-            wrapper.style.opacity = '0';
-            await new Promise(r => setTimeout(r, 200));
-            targetGrid.appendChild(wrapper);
-            wrapper.style.opacity = '1';
-          } else {
-            // Target area not on this page - just remove card
-            this.fadeOutCard(entityId);
-          }
-          this.cleanupEmptySection(currentGrid);
-        }
-      }
-      // If card not in DOM but entity exists and isn't hidden → was previously hidden, skip
-      // It will appear on next navigation
-    }
-  }
-
-  private async handleAreaChange(event: RegistryChangeEvent): Promise<void> {
-    if (!this.content || !this._hass) return;
-
-    if (event.action === 'remove') {
-      const areaId = event.data?.area_id;
-      if (!areaId) return;
-      const grid = this.content.querySelector(`.area-entities[data-area-id="${areaId}"]`) as HTMLElement;
-      if (grid) {
-        const title = grid.previousElementSibling as HTMLElement;
-        grid.style.transition = 'opacity 0.2s ease';
-        grid.style.opacity = '0';
-        if (title?.classList.contains('area-title')) {
-          title.style.transition = 'opacity 0.2s ease';
-          title.style.opacity = '0';
-        }
-        await new Promise(r => setTimeout(r, 200));
-        grid.remove();
-        if (title?.classList.contains('area-title')) title.remove();
-      }
-      return;
-    }
-
-    if (event.action === 'update') {
-      // Area renamed - update all matching titles
-      try {
-        const areas = await this._hass.callWS({ type: 'config/area_registry/list' });
-        for (const area of areas) {
-          const grid = this.content.querySelector(`.area-entities[data-area-id="${area.area_id}"]`);
-          if (grid) {
-            const title = grid.previousElementSibling;
-            if (title?.classList.contains('area-title')) {
-              const span = title.querySelector('span');
-              if (span && span.textContent !== area.name) {
-                span.textContent = area.name;
-              }
-            }
-          }
-        }
-      } catch {
-        // Silent fail
-      }
-    }
-  }
-
-  private fadeOutCard(entityId: string): void {
-    if (!this.content) return;
-    const wrapper = this.content.querySelector(`.entity-card-wrapper[data-entity-id="${entityId}"]`) as HTMLElement;
-    if (wrapper) this.fadeOutWrapper(wrapper);
-  }
-
-  private fadeOutWrapper(wrapper: HTMLElement): void {
-    const parentGrid = wrapper.closest('.area-entities') as HTMLElement;
-
-    // Cleanup the card's resources before removing
-    const card = wrapper.querySelector('home-glass-card') as any;
-    if (card && typeof card.cleanup === 'function') card.cleanup();
-
-    wrapper.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
-    wrapper.style.opacity = '0';
-    wrapper.style.transform = 'scale(0.8)';
-    setTimeout(() => {
-      wrapper.remove();
-      if (parentGrid) this.cleanupEmptySection(parentGrid);
-    }, 250);
-  }
-
-  private cleanupEmptySection(grid: HTMLElement): void {
-    if (!grid || grid.children.length > 0) return;
-    const title = grid.previousElementSibling as HTMLElement;
-    grid.style.transition = 'opacity 0.2s ease';
-    grid.style.opacity = '0';
-    if (title?.classList.contains('area-title')) {
-      title.style.transition = 'opacity 0.2s ease';
-      title.style.opacity = '0';
-    }
-    setTimeout(() => {
-      grid.remove();
-      if (title?.classList.contains('area-title')) title.remove();
-    }, 200);
   }
 
   /**
@@ -722,7 +587,7 @@ export class HomeView extends HTMLElement {
     const content = this.shadowRoot!.querySelector('.page-content') as HTMLElement;
     if (content !== this.content) {
       this.content = content;
-      this.setupContentMutationObserver();
+      this.cardRouter.observe(this.content);
     }
 
     // Only update chips reference if we don't have one or if it's not connected
@@ -743,56 +608,6 @@ export class HomeView extends HTMLElement {
   }
 
   /**
-   * Rebuild the entity->card index from the currently rendered DOM. Runs at most
-   * once per DOM change (guarded by indexDirty), never on the steady hot path.
-   */
-  private rebuildEntityCardIndex(): void {
-    this.entityCardIndex.clear();
-    this.alwaysUpdateCards.clear();
-    if (!this.content) {
-      this.indexDirty = false;
-      return;
-    }
-    const cards = this.content.querySelectorAll('home-glass-card');
-    cards.forEach((el) => {
-      const card = el as HomeCard;
-      if (card.needsContinuousHass) {
-        this.alwaysUpdateCards.add(card);
-        return;
-      }
-      const id = card.entityId;
-      if (!id) return;
-      let set = this.entityCardIndex.get(id);
-      if (!set) {
-        set = new Set<HomeCard>();
-        this.entityCardIndex.set(id, set);
-      }
-      set.add(card);
-    });
-    this.indexDirty = false;
-  }
-
-  /**
-   * Cheap reference-compare diff of hass.states. HA replaces the state object on
-   * every change, so identity inequality == changed. Also reports removed ids.
-   * O(#entities) pointer comparisons; no JSON, no per-attribute work.
-   */
-  private computeChangedEntityIds(oldHass: any, newHass: any): string[] {
-    const changed: string[] = [];
-    const newStates = newHass?.states;
-    if (!newStates) return changed;
-    const oldStates = oldHass?.states;
-    if (!oldStates) return Object.keys(newStates);
-    for (const id in newStates) {
-      if (oldStates[id] !== newStates[id]) changed.push(id);
-    }
-    for (const id in oldStates) {
-      if (!(id in newStates)) changed.push(id);
-    }
-    return changed;
-  }
-
-  /**
    * The single page object that is actually rendered for this view instance,
    * selected by pageType. Only this page needs the new hass; the other four
    * page objects are never rendered here.
@@ -807,65 +622,12 @@ export class HomeView extends HTMLElement {
     }
   }
 
-  /**
-   * Watch this.content for card add/remove/move (full re-render, edit-mode drag,
-   * registry surgical updates) and mark the index dirty for a lazy rebuild on the
-   * next push. Observes light DOM only (childList + subtree) — NOT attributes and
-   * NOT across shadow boundaries, so in-place card updates and camera image swaps
-   * (which live in each card's shadowRoot) never trigger a rebuild.
-   */
-  private setupContentMutationObserver(): void {
-    if (!this.content) return;
-    if (this.contentMutationObserver) {
-      this.contentMutationObserver.disconnect();
-    }
-    this.indexDirty = true;
-    this.contentMutationObserver = new MutationObserver(() => {
-      this.indexDirty = true;
-    });
-    this.contentMutationObserver.observe(this.content, {
-      childList: true,
-      subtree: true,
-    });
-  }
-
   private updateExistingCards(oldHass: any, newHass: any) {
     if (!this.content || !newHass) return;
 
-    // Rebuild the index only when the card DOM actually changed since last push.
-    if (this.indexDirty) {
-      this.rebuildEntityCardIndex();
-    }
+    this.cardRouter.update(this.content, oldHass, newHass);
 
-    // Camera (continuous) cards always get the latest hass for snapshot auth.
-    this.alwaysUpdateCards.forEach((card) => {
-      if (card.hass !== newHass) card.hass = newHass;
-    });
-
-    if (!oldHass) {
-      // No baseline to diff against (first update / config change): refresh all
-      // indexed cards once. Still O(cards) but only on this rare path.
-      this.entityCardIndex.forEach((cards) => {
-        cards.forEach((card) => {
-          if (card.hass !== newHass) card.hass = newHass;
-        });
-      });
-    } else {
-      // Steady hot path: touch only cards whose entity changed this push.
-      const changedIds = this.computeChangedEntityIds(oldHass, newHass);
-      const updated = new Set<HomeCard>();
-      for (const id of changedIds) {
-        const cards = this.entityCardIndex.get(id);
-        if (!cards) continue;
-        cards.forEach((card) => {
-          if (updated.has(card)) return;
-          updated.add(card);
-          if (card.hass !== newHass) card.hass = newHass;
-        });
-      }
-    }
-
-    // Active-page guard: only the rendered page object needs the new hass.
+    // Only the rendered page object needs the new hass.
     const activePage = this.getActivePage();
     if (activePage) activePage.hass = newHass;
   }
@@ -1095,7 +857,7 @@ export class HomeView extends HTMLElement {
     this.ensureChipsExist();
     
     // Pages await mid-render, so pushes that arrived meanwhile never reached the new cards.
-    this.indexDirty = true;
+    this.cardRouter.markDirty();
     this.updateExistingCards(undefined, this._hass);
     this.updateChips();
     
@@ -1294,217 +1056,18 @@ export class HomeView extends HTMLElement {
     if (this.editModeManager?.editMode || !this._hass || !this.content) return;
 
     try {
-      // Snapshot old customizations
       const oldHome = this.config?.customizations?.home || {};
-
-      // Get fresh customizations
       const fresh = this.customizationManager.getCustomizations();
       this.config = { ...this.config, customizations: JSON.parse(JSON.stringify(fresh)) };
-      const newHome = fresh?.home || {};
 
-      let didChange = false;
-
-      // --- Excluded entities ---
-      const toRemove = new Set<string>();
-      const toAdd = new Set<string>();
-      this.diffLists(oldHome.excluded_from_dashboard, newHome.excluded_from_dashboard, toRemove, toAdd);
-      if (!this.config?.pageType || this.config?.pageType === 'home') {
-        this.diffLists(oldHome.excluded_from_home, newHome.excluded_from_home, toRemove, toAdd);
-      }
-      for (const entityId of toRemove) { this.fadeOutCard(entityId); didChange = true; }
-      for (const entityId of toAdd) { this.addCardToDOM(entityId); didChange = true; }
-
-      // --- Favorites ---
-      const oldFav = new Set<string>(oldHome.favorites || []);
-      const newFav = new Set<string>(newHome.favorites || []);
-      const favRemoved = [...oldFav].filter(e => !newFav.has(e));
-      const favAdded = [...newFav].filter(e => !oldFav.has(e));
-
-      // Remove cards from favorites grid
-      const favGrid = this.content.querySelector('.area-entities[data-area-id="favorites"]') as HTMLElement;
-      for (const entityId of favRemoved) {
-        const favCard = favGrid?.querySelector(`.entity-card-wrapper[data-entity-id="${entityId}"]`) as HTMLElement;
-        if (favCard) {
-          this.fadeOutWrapper(favCard);
-          didChange = true;
-        }
-      }
-
-      // Add cards to favorites grid
-      for (const entityId of favAdded) {
-        this.addCardToFavorites(entityId);
-        didChange = true;
-      }
-
-      // --- Weather entity ---
-      const weatherChanged = oldHome.weather_entity !== newHome.weather_entity;
-      if (weatherChanged) {
+      const needsRender = applyHomeCustomizationDiff(this.content, this._hass, oldHome, fresh?.home || {}, this.config?.pageType);
+      if (needsRender) {
         this._rendered = false;
         await this.renderPage('refreshCallback');
-        return;
       }
-
-      // --- Energy toggle ---
-      const energyChanged = oldHome.show_energy !== newHome.show_energy;
-      if (energyChanged) {
-        this._rendered = false;
-        await this.renderPage('refreshCallback');
-        return;
-      }
-
-      // --- Switches toggle ---
-      const switchesChanged = oldHome.showSwitches !== newHome.showSwitches;
-      const includedSwitchesChanged = JSON.stringify(oldHome.includedSwitches || []) !== JSON.stringify(newHome.includedSwitches || []);
-      if (switchesChanged || includedSwitchesChanged) {
-        // Switches visibility changed - need rebuild since it affects many cards
-        this._rendered = false;
-        await this.renderPage('refreshCallback');
-        return;
-      }
-
-      // --- Extra accessories ---
-      const oldExtra = new Set<string>(oldHome.extraAccessories || []);
-      const newExtra = new Set<string>(newHome.extraAccessories || []);
-      const extraRemoved = [...oldExtra].filter(e => !newExtra.has(e));
-      const extraAdded = [...newExtra].filter(e => !oldExtra.has(e));
-      for (const entityId of extraRemoved) { this.fadeOutCard(entityId); didChange = true; }
-      for (const entityId of extraAdded) { this.addCardToDOM(entityId); didChange = true; }
-
-      // --- Section order ---
-      const sectionOrderChanged = JSON.stringify(oldHome.sections?.order) !== JSON.stringify(newHome.sections?.order);
-      if (sectionOrderChanged) {
-        this._rendered = false;
-        await this.renderPage('refreshCallback');
-        return;
-      }
-
-      // --- Hidden sections ---
-      const hiddenChanged = JSON.stringify(oldHome.sections?.hidden || []) !== JSON.stringify(newHome.sections?.hidden || []);
-      if (hiddenChanged) {
-        this._rendered = false;
-        await this.renderPage('refreshCallback');
-        return;
-      }
-
-      // If nothing changed at all, no need to do anything
-      if (!didChange) {
-        // Check for any other customization change we didn't handle
-        const oldStr = JSON.stringify(oldHome);
-        const newStr = JSON.stringify(newHome);
-        if (oldStr !== newStr) {
-          this._rendered = false;
-          await this.renderPage('refreshCallback');
-        }
-      }
-
     } catch (error) {
       console.error('Error refreshing dashboard:', error);
     }
-  }
-
-  /**
-   * Diff two entity lists to find what was added/removed.
-   * Items added to an exclude list = entities removed from UI.
-   * Items removed from an exclude list = entities added to UI.
-   */
-  private diffLists(
-    oldList: string[] | undefined,
-    newList: string[] | undefined,
-    toRemoveFromUI: Set<string>,
-    toAddToUI: Set<string>
-  ): void {
-    const oldSet = new Set(oldList || []);
-    const newSet = new Set(newList || []);
-    // Newly excluded → remove from UI
-    for (const e of newSet) { if (!oldSet.has(e)) toRemoveFromUI.add(e); }
-    // Newly un-excluded → add to UI
-    for (const e of oldSet) { if (!newSet.has(e)) toAddToUI.add(e); }
-  }
-
-  /**
-   * Create a card element and add it to the correct area grid with fade-in.
-   */
-  private addCardToDOM(entityId: string): void {
-    if (!this._hass || !this.content) return;
-
-    const state = this._hass.states[entityId];
-    if (!state) return;
-
-    // Don't add if already in DOM
-    if (this.content.querySelector(`.entity-card-wrapper[data-entity-id="${entityId}"]`)) return;
-
-    const areaId = resolveEntityAreaId(this._hass, entityId);
-
-    // Find the area grid
-    const grid = this.content.querySelector(`.area-entities[data-area-id="${areaId}"]`) as HTMLElement;
-    if (!grid) return; // Area not on this page
-
-    this.appendCardWithFadeIn(grid, entityId, state);
-  }
-
-  private appendCardWithFadeIn(grid: HTMLElement, entityId: string, state: any): void {
-    const cardElement = document.createElement('home-glass-card') as any;
-    cardElement.setConfig({
-      type: 'custom:home-glass-card',
-      entity: entityId,
-      name: state.attributes?.friendly_name || entityId.split('.')[1].replace(/_/g, ' '),
-      domain: entityId.split('.')[0],
-      is_tall: false
-    });
-    cardElement.hass = this._hass;
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'entity-card-wrapper';
-    wrapper.dataset.entityId = entityId;
-    wrapper.appendChild(cardElement);
-
-    wrapper.style.opacity = '0';
-    wrapper.style.transform = 'scale(0.8)';
-    grid.appendChild(wrapper);
-
-    requestAnimationFrame(() => {
-      wrapper.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
-      wrapper.style.opacity = '1';
-      wrapper.style.transform = 'scale(1)';
-    });
-  }
-
-  /**
-   * Add a card to the favorites section, creating the section if needed.
-   */
-  private addCardToFavorites(entityId: string): void {
-    if (!this._hass || !this.content) return;
-
-    const state = this._hass.states[entityId];
-    if (!state) return;
-
-    // Find or create the favorites grid
-    let favGrid = this.content.querySelector('.area-entities[data-area-id="favorites"]') as HTMLElement;
-    if (!favGrid) {
-      // Create the favorites section
-      const titleDiv = document.createElement('div');
-      titleDiv.className = 'hg-section-title';
-      titleDiv.innerHTML = `<span>${localize('section_titles.favorites')}</span>`;
-
-      favGrid = document.createElement('div');
-      favGrid.className = 'area-entities';
-      favGrid.dataset.areaId = 'favorites';
-
-      // Insert at top of content (after header and chips)
-      const firstSection = this.content.querySelector('.hg-section-title, .area-title');
-      if (firstSection) {
-        this.content.insertBefore(favGrid, firstSection);
-        this.content.insertBefore(titleDiv, favGrid);
-      } else {
-        this.content.appendChild(titleDiv);
-        this.content.appendChild(favGrid);
-      }
-    }
-
-    // Don't add if already in favorites grid
-    if (favGrid.querySelector(`.entity-card-wrapper[data-entity-id="${entityId}"]`)) return;
-
-    this.appendCardWithFadeIn(favGrid, entityId, state);
   }
 
   private getScrollParent(): Element | null {
