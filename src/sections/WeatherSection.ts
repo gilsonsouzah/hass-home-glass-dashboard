@@ -245,9 +245,7 @@ export class WeatherSection {
     const condition = stateObj.state;
     const night = isNightTime(hass);
     const condInfo = CONDITION_MAP[condition] || CONDITION_MAP['cloudy'];
-    const conditionKey = `weather.conditions.${condition}`;
-    const localized = localize(conditionKey);
-    const conditionText = localized === conditionKey ? condition : localized;
+    const conditionText = localize(`weather.conditions.${condition}`, condition);
 
     live.stateObj = stateObj;
     live.night = night;

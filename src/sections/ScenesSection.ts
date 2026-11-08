@@ -112,11 +112,6 @@ export class ScenesSection {
       is_tall: isTallCard
     };
     
-    // Add default icon for scenes/scripts without icons
-    if (DashboardConfig.isScenesDomain(domain) && !state.attributes?.icon) {
-      (card as any).default_icon = 'mdi:home';
-    }
-    
     return card;
   }
 
@@ -136,11 +131,6 @@ export class ScenesSection {
         // Determine if card should be tall based on customizations
         const shouldBeTall = this.cardManager.shouldCardBeTall(cardConfig.entity, container.dataset.areaId || 'unknown', context);
         const configWithTall = { ...cardConfig, is_tall: shouldBeTall };
-        
-        // Add default icon if specified
-        if ((cardConfig as any).default_icon) {
-          configWithTall.default_icon = (cardConfig as any).default_icon;
-        }
         
         (cardElement as any).setConfig(configWithTall);
         (cardElement as any).hass = hass;
