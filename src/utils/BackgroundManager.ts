@@ -1,7 +1,49 @@
 import { CustomizationManager } from './CustomizationManager';
 import { DashboardConfig } from '../config/DashboardConfig';
 import { DashboardStateManager } from './DashboardStateManager';
-import { dimFor, wallpaperLuminance, wallpaperTone } from './wallpaperLuminance';
+import { dimFor, gradientLuminance, wallpaperLuminance, wallpaperTone } from './wallpaperLuminance';
+import { DYNAMIC_PRESET, DYNAMIC_REFRESH_MS, Phase, currentPhase, phaseBackground, phaseSky } from './dynamicBackground';
+
+const STYLE_ID = 'hg-body-background';
+
+// HA 2026.11+ paints the theme background on partial-panel-resolver::before and
+// hui-view-background (z-index -1, isolated), which covers body::after.
+const PANEL_BACKGROUND_RESET = `
+      :root {
+        --ha-panel-background: transparent !important;
+        --lovelace-background: transparent !important;
+      }`;
+
+const bodyLayer = (selector: string, background: string, extra = ''): string => `
+      ${selector} {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 100vw;
+        z-index: -1;
+        background: ${background} center center;
+        background-size: cover;
+        background-repeat: no-repeat;${extra}
+      }`;
+
+// ::before holds the previous phase; ::after fades the new one in on top of it.
+// The transition is declared only in the revealed state so the reset to opacity 0 is instant.
+// Reduced motion shrinks --hg-dur-slow to 1ms, which collapses the fade.
+const dynamicCss = (from: Phase, to: Phase, revealed: boolean): string =>
+  PANEL_BACKGROUND_RESET +
+  bodyLayer('body::before', phaseBackground(from)) +
+  bodyLayer(
+    'body::after',
+    phaseBackground(to),
+    revealed
+      ? `
+        opacity: 1;
+        transition: opacity calc(var(--hg-dur-slow) * 5) var(--hg-ease-standard);`
+      : `
+        opacity: 0;`
+  );
 
 export interface BackgroundConfig {
   type: 'preset' | 'custom';
@@ -16,6 +58,9 @@ export class BackgroundManager {
   private static listenersRegistered = false;
   private static probeToken = 0;
   private static probeCache?: { css: string; luminance: number };
+  private static hass?: any;
+  private static dynamicPhase?: Phase;
+  private static dynamicTimer?: number;
 
   // Predefined gradient backgrounds
   static readonly PRESET_BACKGROUNDS = {
@@ -84,6 +129,10 @@ export class BackgroundManager {
       }
     });
 
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') BackgroundManager.refreshDynamic();
+    });
+
     document.addEventListener('hg-dashboard-refresh', () => {
       const manager = BackgroundManager.current;
       if (!manager) return;
@@ -95,8 +144,10 @@ export class BackgroundManager {
   }
 
   private static removeStyle(): void {
-    document.querySelector('#hg-body-background')?.remove();
+    document.querySelector(`#${STYLE_ID}`)?.remove();
     BackgroundManager.probeToken++;
+    window.clearInterval(BackgroundManager.dynamicTimer);
+    BackgroundManager.dynamicPhase = undefined;
     BackgroundManager.clearWallpaperTone();
   }
 
@@ -117,6 +168,43 @@ export class BackgroundManager {
     root.style.setProperty('--hg-title-shadow', 'none');
     if (root.dataset.hgSolid === 'true' || window.matchMedia?.('(prefers-reduced-transparency: reduce)').matches) return;
     root.style.setProperty('--hg-glass-dim', dimFor(luminance));
+  }
+
+  // The sky gradients are known, so the tone comes from them directly instead of a probe.
+  private static applyPhaseTone(phase: Phase): void {
+    BackgroundManager.probeToken++;
+    BackgroundManager.applyWallpaperTone(gradientLuminance(phaseSky(phase)) ?? 0.5);
+  }
+
+  static getCurrentPhase(): Phase {
+    const hass = BackgroundManager.hass ?? (document.querySelector('home-assistant') as any)?.hass;
+    return currentPhase(hass, new Date());
+  }
+
+  /** Feed every hass update; sun.sun changes move the dynamic wallpaper to its new phase. */
+  static updateHass(hass: any): void {
+    BackgroundManager.hass = hass;
+    BackgroundManager.refreshDynamic();
+  }
+
+  updateHass(hass: any): void {
+    BackgroundManager.updateHass(hass);
+  }
+
+  private static refreshDynamic(): void {
+    const from = BackgroundManager.dynamicPhase;
+    const style = document.querySelector(`#${STYLE_ID}`);
+    if (from === undefined || !style) return;
+
+    const to = BackgroundManager.getCurrentPhase();
+    if (to === from) return;
+
+    BackgroundManager.dynamicPhase = to;
+    style.textContent = dynamicCss(from, to, false);
+    // Commit the hidden state first, otherwise the opacity change has nothing to transition from.
+    void getComputedStyle(document.body, '::after').opacity;
+    style.textContent = dynamicCss(from, to, true);
+    BackgroundManager.applyPhaseTone(to);
   }
 
   private async probeWallpaper(backgroundStyle: string): Promise<void> {
@@ -175,36 +263,26 @@ export class BackgroundManager {
       backgroundStyle = BackgroundManager.getDefaultBackground();
     }
     
+    const dynamic = config.type === 'preset' && config.backgroundImage === DYNAMIC_PRESET;
+
     BackgroundManager.removeStyle();
-    
-    // Create new style element for body background
-    // Uses body::after pseudo-element for iOS Safari compatibility
+
+    const phase = BackgroundManager.getCurrentPhase();
     const styleElement = document.createElement('style');
-    styleElement.id = 'hg-body-background';
-    
-    // HA 2026.11+ paints the theme background on partial-panel-resolver::before and
-    // hui-view-background (z-index -1, isolated), which covers body::after.
-    styleElement.textContent = `
-      :root {
-        --ha-panel-background: transparent !important;
-        --lovelace-background: transparent !important;
-      }
-      body::after {
-        content: "";
-        position: fixed;
-        top: 0;
-        left: 0;
-        height: 100vh;
-        width: 100vw;
-        z-index: -1;
-        background: ${backgroundStyle} center center;
-        background-size: cover;
-        background-repeat: no-repeat;
-      }
-    `;
-    
+    styleElement.id = STYLE_ID;
+    styleElement.textContent = dynamic
+      ? dynamicCss(phase, phase, true)
+      : PANEL_BACKGROUND_RESET + bodyLayer('body::after', backgroundStyle);
+
     document.head.appendChild(styleElement);
-    void this.probeWallpaper(backgroundStyle);
+
+    if (!dynamic) {
+      void this.probeWallpaper(backgroundStyle);
+      return;
+    }
+    BackgroundManager.dynamicPhase = phase;
+    BackgroundManager.applyPhaseTone(phase);
+    BackgroundManager.dynamicTimer = window.setInterval(() => BackgroundManager.refreshDynamic(), DYNAMIC_REFRESH_MS);
   }
 
   /**
@@ -236,6 +314,7 @@ export class BackgroundManager {
    * Get a preset background by name
    */
   static getPresetBackground(name: string): string {
+    if (name === DYNAMIC_PRESET) return phaseBackground(BackgroundManager.getCurrentPhase());
     return BackgroundManager.PRESET_BACKGROUNDS[name as keyof typeof BackgroundManager.PRESET_BACKGROUNDS] || BackgroundManager.getDefaultBackground();
   }
 
@@ -243,7 +322,7 @@ export class BackgroundManager {
    * Get all available preset background names
    */
   static getPresetNames(): string[] {
-    return Object.keys(BackgroundManager.PRESET_BACKGROUNDS);
+    return [...Object.keys(BackgroundManager.PRESET_BACKGROUNDS), DYNAMIC_PRESET];
   }
 
   /**
