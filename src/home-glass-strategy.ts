@@ -26,9 +26,7 @@ injectLiquidGlassStyles();
 // Extend window interface for TypeScript
 declare global {
   interface Window {
-    customCards?: any[];
     customStrategies?: any[];
-    appleHomeCleanupRegistered?: boolean;
   }
 }
 
@@ -66,8 +64,6 @@ async function generateLovelaceDashboard(info: { hass: any; narrow?: boolean }, 
   // Set this dashboard as active since we're generating it
   dashboardStateManager.setDashboardActive(dashboardKey);
 
-  const views = [];
-
   // Load user customizations using CustomizationManager singleton
   const customizationManager = CustomizationManager.getInstance(hass);
   const customizations = await customizationManager.loadCustomizations();
@@ -93,106 +89,47 @@ async function generateLovelaceDashboard(info: { hass: any; narrow?: boolean }, 
     uiManager.reapplyDashboardSettings();
   }, 100);
 
-  // Home view configuration - always first
-  const homeTitle = options?.title || hass?.config?.location_name || localize('pages.my_home');
-  views.push({
-    title: homeTitle,
-    path: 'home',
-    icon: 'mdi:home',
+  const makeView = (
+    title: string,
+    path: string,
+    icon: string,
+    card: Record<string, unknown>,
+    subview = true
+  ) => ({
+    title,
+    path,
+    icon,
     panel: true,
-    cards: [
-      {
-        type: 'custom:home-glass-view',
-        title: homeTitle,
-        pageType: 'home',
-        customizations: customizations,
-      },
-    ],
+    ...(subview ? { subview: true } : {}),
+    cards: [{ type: 'custom:home-glass-view', title, ...card, customizations }],
   });
 
-  // Group view configurations - one for each device group (exclude OTHER group as it doesn't have its own page)
+  const homeTitle = options?.title || hass?.config?.location_name || localize('pages.my_home');
+  const views = [makeView(homeTitle, 'home', 'mdi:home', { pageType: 'home' }, false)];
+
+  // OTHER has no page of its own
   const deviceGroups = (Object.keys(DashboardConfig.GROUP_STYLES) as DeviceGroup[]).filter(
     (group) => group !== DeviceGroup.OTHER
   );
-
   for (const group of deviceGroups) {
     const groupStyle = DashboardConfig.getGroupStyle(group);
-
     const groupName = typeof groupStyle.name === 'function' ? groupStyle.name() : groupStyle.name;
-
-    views.push({
-      title: groupName,
-      path: group,
-      icon: groupStyle.icon,
-      panel: true,
-      subview: true,
-      cards: [
-        {
-          type: 'custom:home-glass-view',
-          title: groupName,
-          pageType: 'group',
-          deviceGroup: group,
-          customizations: customizations,
-        },
-      ],
-    });
+    views.push(makeView(groupName, group, groupStyle.icon, { pageType: 'group', deviceGroup: group }));
   }
 
-  // Add special pages (Scenes and Cameras)
-  views.push({
-    title: localize('pages.scenes'),
-    path: 'scenes',
-    icon: 'mdi:palette',
-    panel: true,
-    subview: true,
-    cards: [
-      {
-        type: 'custom:home-glass-view',
-        title: localize('pages.scenes'),
-        pageType: 'scenes',
-        customizations: customizations,
-      },
-    ],
-  });
+  views.push(makeView(localize('pages.scenes'), 'scenes', 'mdi:palette', { pageType: 'scenes' }));
+  views.push(makeView(localize('pages.cameras'), 'cameras', 'mdi:cctv', { pageType: 'cameras' }));
 
-  views.push({
-    title: localize('pages.cameras'),
-    path: 'cameras',
-    icon: 'mdi:cctv',
-    panel: true,
-    subview: true,
-    cards: [
-      {
-        type: 'custom:home-glass-view',
-        title: localize('pages.cameras'),
-        pageType: 'cameras',
-        customizations: customizations,
-      },
-    ],
-  });
-
-  // Add room views for each area
   try {
     const areas = await hass.callWS({ type: 'config/area_registry/list' });
-
     for (const area of areas) {
-      views.push({
-        title: area.name,
-        path: `room-${area.area_id}`,
-        icon: 'mdi:home-outline',
-        panel: true,
-        subview: true,
-        cards: [
-          {
-            type: 'custom:home-glass-view',
-            title: area.name,
-            pageType: 'room',
-            areaId: area.area_id,
-            areaName: area.name,
-            customizations: customizations,
-          },
-        ],
-      });
+      views.push(
+        makeView(area.name, `room-${area.area_id}`, 'mdi:home-outline', {
+          pageType: 'room',
+          areaId: area.area_id,
+          areaName: area.name,
+        })
+      );
     }
   } catch (error) {
     console.error('Error fetching areas for room views:', error);

@@ -1,24 +1,25 @@
 import { CustomizationManager } from './CustomizationManager';
 import { DashboardStateManager } from './DashboardStateManager';
 import { localize } from './LocalizationService';
+import { dockToRestore } from './sidebarDock';
 
 export interface HomeAssistantUIState {
   headerVisible: boolean;
   sidebarVisible: boolean;
 }
 
+const HEADER_RETRY_DELAYS_MS = [100, 300, 700, 1500];
+
 export class HomeAssistantUIManager {
   private static instance: HomeAssistantUIManager | null = null;
   private state: HomeAssistantUIState;
-  private headerElement: HTMLElement | null = null;
-  private huiRootElement: HTMLElement | null = null;
   private initialized = false;
   private customizationManager: CustomizationManager | null = null;
-  private originalState: HomeAssistantUIState | null = null;
-  private dashboardStateManager: DashboardStateManager | null = null;
   private listenerSetup = false;
   private lastSidebarState: boolean | null = null;
-  private dashboardStateListener?: (isActive: boolean, dashboardKey?: string | null) => void;
+  // The user's own `hass.dockedSidebar` ('docked' | 'auto' | 'always_hidden'), captured
+  // when we hide the sidebar so leaving the dashboard puts back exactly that.
+  private originalDock: string | null = null;
   private restoreTimeout: number | null = null;
 
   private constructor() {
@@ -81,56 +82,56 @@ export class HomeAssistantUIManager {
   }
 
 
-  private collapseHeader(hide: boolean = true): void {
+  /** Returns false when hui-root or its header is not rendered yet (nothing was applied). */
+  private collapseHeader(hide: boolean = true): boolean {
     const haRoot = document.querySelector("home-assistant");
     const huiRoot = this.deepQuery(haRoot, "hui-root");
-    const headerEl = huiRoot?.shadowRoot?.querySelector(".header");
+    const headerEl = huiRoot?.shadowRoot?.querySelector(".header") as HTMLElement | null;
 
     if (!huiRoot || !headerEl) {
-      return;
+      return false;
     }
 
-    this.huiRootElement = huiRoot as HTMLElement;
-    this.headerElement = headerEl as HTMLElement;
-
     try {
+      const viewElement = huiRoot.shadowRoot?.querySelector("#view") as HTMLElement | null;
       if (hide) {
-        this.headerElement.style.display = "none";
-        this.huiRootElement.style.setProperty("--mdc-top-app-bar-height", "0px");
-        this.huiRootElement.style.setProperty("--header-height", "0px");
-
-        const viewElement = this.huiRootElement.shadowRoot?.querySelector("#view") as HTMLElement;
-        if (viewElement) {
-          viewElement.style.setProperty("padding-top", "0px");
-        }
+        headerEl.style.display = "none";
+        huiRoot.style.setProperty("--mdc-top-app-bar-height", "0px");
+        huiRoot.style.setProperty("--header-height", "0px");
+        viewElement?.style.setProperty("padding-top", "0px");
       } else {
-        this.headerElement.style.display = "";
-        this.huiRootElement.style.removeProperty("--mdc-top-app-bar-height");
-        this.huiRootElement.style.removeProperty("--header-height");
-        
-        const viewElement = this.huiRootElement.shadowRoot?.querySelector("#view") as HTMLElement;
-        if (viewElement) {
-          viewElement.style.removeProperty("padding-top");
-        }
+        headerEl.style.display = "";
+        huiRoot.style.removeProperty("--mdc-top-app-bar-height");
+        huiRoot.style.removeProperty("--header-height");
+        viewElement?.style.removeProperty("padding-top");
       }
 
-      this.huiRootElement.dispatchEvent(
+      huiRoot.dispatchEvent(
         new Event("iron-resize", { bubbles: true, composed: true })
       );
     } catch (error) {
       console.warn('Error in collapseHeader:', error);
     }
+    return true;
+  }
+
+  private fire(target: Element, type: string, detail: Record<string, unknown>): void {
+    target.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
 
   private collapseSidebar(hide: boolean = true): void {
     if (this.lastSidebarState === hide) {
       return;
     }
+    // Showing only undoes a hide of ours; otherwise it would overwrite the user's dock preference.
+    if (!hide && this.originalDock === null) {
+      return;
+    }
     
     this.lastSidebarState = hide;
     
     try {
-      const ha = document.querySelector("home-assistant");
+      const ha = document.querySelector("home-assistant") as any;
       const main = ha?.shadowRoot?.querySelector("home-assistant-main");
       
       if (!main) {
@@ -140,13 +141,12 @@ export class HomeAssistantUIManager {
       }
 
       if (hide) {
-        main.dispatchEvent(new CustomEvent("hass-dock-sidebar", {
-          detail: { dock: "always_hidden" },
-          bubbles: true,
-          composed: true,
-        }));
+        this.originalDock ??= dockToRestore(ha.hass?.dockedSidebar);
+        this.fire(main, "hass-dock-sidebar", { dock: "always_hidden" });
       } else {
-        this.dockAfterDrawerClosed(main, "docked");
+        const dock = this.originalDock!;
+        this.originalDock = null;
+        this.dockAfterDrawerClosed(main, dock);
       }
       
     } catch (error) {
@@ -163,11 +163,7 @@ export class HomeAssistantUIManager {
     
     if (!isOpen) {
       // Already non-blocking, dock immediately
-      main.dispatchEvent(new CustomEvent("hass-dock-sidebar", {
-        detail: { dock: targetDock },
-        bubbles: true,
-        composed: true,
-      }));
+      this.fire(main, "hass-dock-sidebar", { dock: targetDock });
       return;
     }
 
@@ -213,30 +209,18 @@ export class HomeAssistantUIManager {
       });
 
     // Step A: ensure the drawer is closing
-    main.dispatchEvent(new CustomEvent("hass-toggle-menu", {
-      detail: { open: false },
-      bubbles: true,
-      composed: true,
-    }));
+    this.fire(main, "hass-toggle-menu", { open: false });
 
     // Step B: wait until the overlay is truly gone
     await waitForNonBlocking();
 
     // Extra safety check as suggested
     if (document.body.style.overflow === "hidden") {
-      main.dispatchEvent(new CustomEvent("hass-toggle-menu", {
-        detail: { open: false },
-        bubbles: true,
-        composed: true,
-      }));
+      this.fire(main, "hass-toggle-menu", { open: false });
     }
 
     // Step C: now it is safe to change the docking mode
-    main.dispatchEvent(new CustomEvent("hass-dock-sidebar", {
-      detail: { dock: targetDock },
-      bubbles: true,
-      composed: true,
-    }));
+    this.fire(main, "hass-dock-sidebar", { dock: targetDock });
   }
 
   private applyUIState(): void {
@@ -290,140 +274,63 @@ export class HomeAssistantUIManager {
     return this.state.sidebarVisible ? localize('toggles.hide_sidebar') : localize('toggles.show_sidebar');
   }
 
-  /**
-   * Setup dashboard state listener for immediate UI updates
-   */
   private setupDashboardStateListener(): void {
-    if (!this.customizationManager) {
-      return;
-    }
+    const dashboardState = DashboardStateManager.getInstance();
 
-    this.dashboardStateManager = DashboardStateManager.getInstance();
-    
-    // Store original state BEFORE any dashboard modifications
-    this.originalState = {
-      headerVisible: true, // Default HA state
-      sidebarVisible: true // Default HA state  
-    };
-    
-    // Apply dashboard settings immediately if we're already in dashboard
-    if (this.dashboardStateManager.isDashboardActive()) {
+    if (dashboardState.isDashboardActive()) {
       this.applyDashboardUISettings();
     }
-    
-    // Create and store the listener so we can remove it later
-    this.dashboardStateListener = (isActive: boolean, dashboardKey?: string | null) => {
+
+    dashboardState.addListener((isActive: boolean) => {
       if (isActive) {
-        // Cancel pending restoration
         if (this.restoreTimeout !== null) {
           clearTimeout(this.restoreTimeout);
           this.restoreTimeout = null;
         }
-        // Entering dashboard - apply dashboard UI settings
-        requestAnimationFrame(() => {
-          this.applyDashboardUISettings();
-        });
+        requestAnimationFrame(() => this.reapplyDashboardSettings());
       } else {
-        // Leaving dashboard - schedule restoration after delay
+        // Delay so quick hops between Home Glass dashboards do not flash the HA chrome
         this.restoreTimeout = window.setTimeout(() => {
-          this.restoreOriginalUIState();
+          this.restoreHomeAssistantUI();
           this.restoreTimeout = null;
         }, 300);
       }
-    };
-    
-    this.dashboardStateManager.addListener(this.dashboardStateListener);
+    });
   }
 
-  private applyDashboardUISettings(): void {
-    if (!this.customizationManager) return;
+  /** Returns false when the header had to be hidden but hui-root is not ready yet. */
+  private applyDashboardUISettings(): boolean {
+    if (!this.customizationManager || !DashboardStateManager.getInstance().isDashboardActive()) {
+      return true;
+    }
 
-    const shouldHideHeader = this.customizationManager.isHeaderHidden();
-    const shouldHideSidebar = this.customizationManager.isSidebarHidden();
+    this.state.headerVisible = !this.customizationManager.isHeaderHidden();
+    this.state.sidebarVisible = !this.customizationManager.isSidebarHidden();
 
-    // Update state to match customizations
-    this.state.headerVisible = !shouldHideHeader;
-    this.state.sidebarVisible = !shouldHideSidebar;
-
-    this.collapseHeader(!this.state.headerVisible);
+    const headerApplied = this.collapseHeader(!this.state.headerVisible);
     this.collapseSidebar(!this.state.sidebarVisible);
+    return headerApplied || this.state.headerVisible;
   }
 
   /**
-   * Force reapplication of dashboard UI settings - call when settings change
+   * Apply dashboard UI settings, retrying while hui-root has not rendered its header
+   * (a fresh hui-root after navigating back from another panel).
    */
-  public reapplyDashboardSettings(): void {
-    if (this.customizationManager) {
-      this.applyDashboardUISettings();
-      
-      if (!this.headerElement) {
-        setTimeout(() => {
-          this.applyDashboardUISettings();
-        }, 500);
-      }
-    }
+  public reapplyDashboardSettings(attempt = 0): void {
+    if (this.applyDashboardUISettings() || attempt >= HEADER_RETRY_DELAYS_MS.length) return;
+    setTimeout(() => this.reapplyDashboardSettings(attempt + 1), HEADER_RETRY_DELAYS_MS[attempt]);
   }
 
-  /**
-   * Restore the original Home Assistant UI state
-   */
-  private restoreOriginalUIState(): void {
-    if (!this.originalState) return;
-
-    // Force restoration to default HA state
-    const needsHeaderRestore = !this.originalState.headerVisible;
-    const needsSidebarRestore = !this.originalState.sidebarVisible;
-
-    // Restore header if it was hidden
-    if (needsHeaderRestore || !this.state.headerVisible) {
+  private restoreHomeAssistantUI(): void {
+    if (!this.state.headerVisible) {
       this.state.headerVisible = true;
-      this.collapseHeader(false); // Show header
+      this.collapseHeader(false);
     }
 
-    // Restore sidebar if it was hidden
-    if (needsSidebarRestore || !this.state.sidebarVisible) {
-      // Reset the last state tracker to force restoration
+    if (!this.state.sidebarVisible) {
       this.lastSidebarState = null;
       this.state.sidebarVisible = true;
-      this.collapseSidebar(false); // Show sidebar
-    }
-  }
-
-  /**
-   * Stop dashboard state listening
-   */
-  private stopDashboardStateListener(): void {
-    // Clear any pending restore timeout
-    if (this.restoreTimeout !== null) {
-      clearTimeout(this.restoreTimeout);
-      this.restoreTimeout = null;
-    }
-    
-    // Remove the listener from DashboardStateManager
-    if (this.dashboardStateManager && this.dashboardStateListener) {
-      this.dashboardStateManager.removeListener(this.dashboardStateListener);
-      this.dashboardStateListener = undefined;
-    }
-    this.dashboardStateManager = null;
-  }
-
-  /**
-   * Cleanup method for complete shutdown
-   */
-  public cleanup(): void {
-    this.listenerSetup = false;
-    this.lastSidebarState = null;
-    this.stopDashboardStateListener();
-    this.restoreOriginalUIState();
-  }
-
-  public static resetInstance(): void {
-    // Only for testing or complete cleanup
-    if (HomeAssistantUIManager.instance) {
-      HomeAssistantUIManager.instance.cleanup();
-      HomeAssistantUIManager.instance.collapseHeader(false);
-      HomeAssistantUIManager.instance.collapseSidebar(false);
-      HomeAssistantUIManager.instance = null;
+      this.collapseSidebar(false);
     }
   }
 }
