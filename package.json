@@ -10,7 +10,7 @@
     "lint:fix": "eslint --fix \"src/**/*.{ts,js}\"",
     "format": "prettier --write \"**/*.{ts,js,json,css,md,yml,yaml}\"",
     "typecheck": "tsc --noEmit -p .",
-    "test": "node --test test/"
+    "test": "node --test 'test/**/*.test.ts'"
   },
   "keywords": [
     "home-assistant",
