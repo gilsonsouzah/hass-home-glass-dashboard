@@ -4,8 +4,6 @@ import { HomeHeader, HeaderConfig } from '../sections/HomeHeader';
 import { CustomizationManager } from '../utils/CustomizationManager';
 import { CardManager } from '../utils/CardManager';
 import { setupLocalize, localize } from '../utils/LocalizationService';
-import { HomeChips } from '../sections/HomeChips';
-import { ChipsConfigurationManager } from '../utils/ChipsConfigurationManager';
 import { HomePage } from '../pages/HomePage';
 import { GroupPage } from '../pages/GroupPage';
 import { RTLHelper } from '../utils/RTLHelper';
@@ -16,6 +14,11 @@ import { DeviceGroup } from '../config/DashboardConfig';
 import { RegistrySubscriptionManager, RegistryChangeCallback, RegistryChangeEvent } from '../utils/RegistrySubscriptionManager';
 import { VIEW_STYLES } from './view/styles';
 import { CardHassRouter } from './view/CardHassRouter';
+import { ChipsController } from './view/ChipsController';
+import { buildHeaderConfig, headerTitleFor } from './view/headerConfig';
+import { pageContextFor } from './view/pageTypes';
+import { getScrollParent } from './view/scroll';
+import { updateTallCardVisual } from './view/tallCard';
 import { handleEntityChange, handleAreaChange, applyHomeCustomizationDiff } from './view/domUpdates';
 
 const RENDER_THROTTLE_MS = 500;
@@ -30,7 +33,7 @@ export class HomeView extends HTMLElement {
   private _isTransitioning = false; // Add transition state
   private _lastRenderTime = 0;
   private _pendingRender?: ReturnType<typeof setTimeout>;
-  private chipsElement?: HomeChips;
+  private chips: ChipsController;
   private visibilityChangeHandler?: () => void; // Add visibility change handler
   private globalRefreshHandler?: (event: Event) => void; // Add global refresh handler
   
@@ -68,6 +71,17 @@ export class HomeView extends HTMLElement {
     
     // Create instance-specific header (NO SINGLETON!) and pass editModeManager
     this.appleHeader = new HomeHeader();
+    this.chips = new ChipsController(
+      {
+        getContent: () => this.content,
+        getHass: () => this._hass,
+        getConfig: () => this.config,
+        isEditMode: () => this.editModeManager.editMode,
+        enableChipsDragAndDrop: (container) => this.dragAndDropManager.enableDragAndDrop(container),
+      },
+      this.appleHeader,
+      this.customizationManager
+    );
     this.appleHeader.setEditModeManager(this.editModeManager);
     this.appleHeader.addRefreshCallback(this.refreshCallback);
     
@@ -304,9 +318,7 @@ export class HomeView extends HTMLElement {
     
     // Update header title if available
     if (this.appleHeader && config.title) {
-      // For room pages, use areaName as title, not config.title
-      const titleToUse = config.pageType === 'room' ? (config.areaName || config.title) : config.title;
-      this.appleHeader.setTitle(titleToUse);
+      this.appleHeader.setTitle(headerTitleFor(config));
     } else {
     }
     
@@ -338,122 +350,27 @@ export class HomeView extends HTMLElement {
   private updateConfigProperties(config: any): void {
     // Update title without full render
     if (this.appleHeader && config.title !== this.config?.title) {
-      // For room pages, use areaName as title, not config.title
-      const titleToUse = config.pageType === 'room' ? (config.areaName || config.title) : config.title;
-      this.appleHeader.setTitle(titleToUse);
+      this.appleHeader.setTitle(headerTitleFor(config));
     }
     
     // Update chips active group if changed
-    if (this.chipsElement && config.activeGroup !== this.config?.activeGroup) {
-      this.chipsElement.setActiveGroup(config.activeGroup);
+    if (config.activeGroup !== this.config?.activeGroup) {
+      this.chips.setActiveGroup(config.activeGroup);
     }
     
     // Update existing cards with new hass if available (no diff baseline after a config change)
     this.updateExistingCards(undefined, this._hass);
 
     // Update chips to reflect any config changes
-    this.updateChips();
+    this.chips.update();
   }
 
   private async updateHeaderForConfig() {
     if (!this.content || !this.config) return;
-    
-    // Determine page type for header configuration
-    const isGroupPage = this.config.pageType === 'group';
-    const isSpecialPage = ['room', 'scenes', 'cameras'].includes(this.config.pageType);
-    
-    // Always ensure Apple Home header exists and is properly configured
-    
-    // Configure header based on page type - direct to HomeHeader
-    if (!isGroupPage && !isSpecialPage) {
-      // Home page: configure header for home (show menu, use home title)
-      const homeConfig: HeaderConfig = {
-        title: this.config.title || localize('pages.my_home'),
-        isGroupPage: false,
-        showMenu: true
-      };
-      await this.appleHeader.init(this.content, homeConfig);
-      // Update page content padding after header is initialized
-      this.appleHeader.updatePageContentPadding();
-    } else {
-      // Group/Special pages: configure header (show menu and back button for special pages)
-      let pageTitle = this.config.title || 'Page';
-      let showBackButton = false;
-      
-      // Set appropriate title and back button based on page type
-      if (this.config.pageType === 'room') {
-        // For room pages, use config.title (which should be the room name from hg-strategy.ts)
-        // This matches how group pages work - they just use config.title directly
-        pageTitle = this.config.title || localize('pages.default_room');
-        showBackButton = true;
-      } else if (this.config.pageType === 'scenes') {
-        pageTitle = localize('pages.scenes');
-        showBackButton = true;
-      } else if (this.config.pageType === 'cameras') {
-        pageTitle = localize('pages.cameras');
-        showBackButton = true;
-      }
-      
-      const pageConfig: HeaderConfig = {
-        title: pageTitle,
-        isGroupPage: isGroupPage, // Use same styling as group pages
-        isSpecialPage: isSpecialPage, // Add special page flag for immediate scroll header
-        showMenu: !isGroupPage, // Show menu for special pages
-        showBackButton: showBackButton // Show back button for special pages
-      };
-      await this.appleHeader.init(this.content, pageConfig);
-    }
-    
-    // Update page content padding after header is initialized
-    this.appleHeader.updatePageContentPadding();
-    
-    // Always ensure chips are properly configured and connected to header
-    this.ensureChipsConfiguredForHeader();
-  }
 
-  private ensureChipsConfiguredForHeader() {
-    
-    // Only set chips to header if this is a group page
-    const isGroupPage = this.config?.pageType === 'group';
-    const isSpecialPage = ['room', 'scenes', 'cameras'].includes(this.config?.pageType);
-    
-    // Hide chips completely for special pages (room, scenes, cameras)
-    if (isSpecialPage) {
-      this.appleHeader.setChipsElement(null); // Clear header chips for special pages
-      // Also hide the permanent chips container
-      const chipsContainer = this.content?.querySelector('.permanent-chips') as HTMLElement;
-      if (chipsContainer) {
-        chipsContainer.style.display = 'none';
-      }
-      return;
-    }
-    
-    if (!isGroupPage) {
-      this.appleHeader.setChipsElement(null); // Clear header chips for home page
-      // Show chips container for non-special pages
-      const chipsContainer = this.content?.querySelector('.permanent-chips') as HTMLElement;
-      if (chipsContainer) {
-        chipsContainer.style.display = 'block';
-      }
-      return;
-    }
-    
-    // Make sure chips exist and are configured
-    this.ensureChipsExist();
-    
-    // Pass chips to header if they're properly configured (group pages only)
-    if (this.chipsElement && this.chipsElement.isConfigured() && this.chipsElement.hass) {
-      this.appleHeader.setChipsElement(this.chipsElement);
-    } else if (this.chipsElement) {
-      this.configureChips();
-      
-      // Try again after configuration
-      if (this.chipsElement.isConfigured() && this.chipsElement.hass) {
-        this.appleHeader.setChipsElement(this.chipsElement);
-      } else {
-      }
-    } else {
-    }
+    await this.appleHeader.init(this.content, buildHeaderConfig(this.config));
+    this.appleHeader.updatePageContentPadding();
+    this.chips.ensureConfiguredForHeader();
   }
 
   set hass(hass: any) {
@@ -498,7 +415,7 @@ export class HomeView extends HTMLElement {
     } else {
       // Optimized updates: route the new hass only to affected cards
       this.updateExistingCards(oldHass, this._hass);
-      this.updateChips();
+      this.chips.update();
     }
   }
 
@@ -590,16 +507,8 @@ export class HomeView extends HTMLElement {
       this.cardRouter.observe(this.content);
     }
 
-    // Only update chips reference if we don't have one or if it's not connected
-    if (!this.chipsElement) {
-      const chipsContainer = this.content.querySelector('.permanent-chips') as HTMLElement;
-      if (chipsContainer) {
-        this.chipsElement = new HomeChips(chipsContainer, this.customizationManager);
-        this.setupChipsCallback();
-      } else {
-      }
-    }
-    
+    this.chips.attach();
+
     // Only initialize header when structure is created for the first time
     // This prevents repeated header initialization calls
     if (structureCreated) {
@@ -645,9 +554,7 @@ export class HomeView extends HTMLElement {
     }
 
     // Update chips edit mode
-    if (this.chipsElement) {
-      this.chipsElement.setEditMode(editMode);
-    }
+    this.chips.setEditMode(editMode);
     
     const pageType = this.config?.pageType;
     if (pageType === 'cameras') {
@@ -672,24 +579,6 @@ export class HomeView extends HTMLElement {
       }
     }
   }
-
-  private setupChipsCallback() {
-    if (this.chipsElement) {
-      this.chipsElement.setOnRenderCallback(() => {
-        // Re-enable drag and drop for chips after they re-render
-        if (this.editModeManager.editMode) {
-          setTimeout(() => {
-            const chipsContainer = this.content?.querySelector('.permanent-chips') as HTMLElement;
-            if (chipsContainer) {
-              this.dragAndDropManager.enableDragAndDrop(chipsContainer);
-            }
-          }, 50);
-        }
-      });
-    }
-  }
-
-  // All drag-and-drop functionality is now handled by DragAndDropManager
 
   // A room renders several grids with the same data-area-id (one per device group),
   // so the dragged grid must be passed in; the selector is only a fallback.
@@ -723,8 +612,7 @@ export class HomeView extends HTMLElement {
   }
 
   private getPageContext(): string {
-    const pageType = this.config?.pageType;
-    return ['room', 'scenes', 'cameras', 'group'].includes(pageType) ? pageType : 'home';
+    return pageContextFor(this.config?.pageType);
   }
 
   private async renderPage(source: string = 'unknown') {
@@ -753,7 +641,7 @@ export class HomeView extends HTMLElement {
     const hasExistingContent = this.content && this.content.children.length > 2;
 
     // Save scroll position before rebuild
-    const scrollParent = this.getScrollParent();
+    const scrollParent = getScrollParent(this);
     const savedScrollTop = hasExistingContent && scrollParent ? scrollParent.scrollTop : 0;
 
     if (hasExistingContent) {
@@ -763,7 +651,7 @@ export class HomeView extends HTMLElement {
     }
 
     try {
-      this.forceChipsReset();
+      this.chips.forceReset();
       this.callOnCards('pauseCamera');
 
       if (this.config?.pageType === 'group' && this.config?.deviceGroup) {
@@ -854,16 +742,16 @@ export class HomeView extends HTMLElement {
     }
 
     // CRITICAL: Ensure chips are recreated and properly configured after page render
-    this.ensureChipsExist();
+    this.chips.ensureExist();
     
     // Pages await mid-render, so pushes that arrived meanwhile never reached the new cards.
     this.cardRouter.markDirty();
     this.updateExistingCards(undefined, this._hass);
-    this.updateChips();
+    this.chips.update();
     
     // CRITICAL: Connect chips to header after everything is ready
     setTimeout(() => {
-      this.ensureChipsConfiguredForHeader();
+      this.chips.ensureConfiguredForHeader();
     }, 100);
 
     // Resume cameras after page is rendered
@@ -873,173 +761,16 @@ export class HomeView extends HTMLElement {
     }, 200);
   }
 
-  private configureChips() {
-    if (!this.chipsElement) {
-      return;
-    }
-    
-    
-    // Get chips settings from dashboard config - use defaults if not configured
-    const chipsSettings = ChipsConfigurationManager.getSettingsFromConfig();
-    
-    // Set configuration from settings
-    this.chipsElement.setConfig(chipsSettings.chips_config);
-    
-    // Set active group if specified in config
-    if (this.config?.activeGroup) {
-      this.chipsElement.setActiveGroup(this.config.activeGroup);
-    }
-    
-    // Set hass if available
-    if (this._hass) {
-      this.chipsElement.hass = this._hass;
-    }
-    
-  }
-
-  /**
-   * Reset chips configuration for component reuse
-   * Since chips are now permanent, we just need to reconfigure them
-   */
-  private forceChipsReset() {
-    
-    // Make sure we have the chips reference from the correct location
-    if (!this.chipsElement && this.content) {
-      const chipsContainer = this.content.querySelector('.permanent-chips') as HTMLElement;
-      if (chipsContainer) {
-        this.chipsElement = new HomeChips(chipsContainer, this.customizationManager);
-        this.setupChipsCallback();
-      }
-    }
-    
-    // Clear existing chips content to force clean state
-    if (this.chipsElement) {
-      this.chipsElement.clearContainer();
-    }
-    
-    // Re-configure chips to ensure they have the proper config
-    if (this._hass) {
-      this.configureChips();
-    } else {
-    }
-  }
-
-  private ensureChipsExist() {
-    
-    // Chips are now permanent - just make sure we have the reference
-    if (!this.chipsElement && this.content) {
-      const chipsContainer = this.content.querySelector('.permanent-chips') as HTMLElement;
-      if (chipsContainer) {
-        this.chipsElement = new HomeChips(chipsContainer, this.customizationManager);
-      }
-    }
-    
-    // Debug chips state
-    if (this.chipsElement) {
-      
-      // CRITICAL FIX: Always ensure chips are properly configured
-      // This handles cases where the element exists but lost its config
-      if (!this.chipsElement.isConfigured()) {
-        this.configureChips();
-      }
-      
-      // Ensure hass is set
-      if (!this.chipsElement.hass && this._hass) {
-        this.chipsElement.hass = this._hass;
-      }
-    } else {
-    }
-    
-    // Configure chips for current page type
-    if (this.chipsElement && this.chipsElement.isConfigured()) {
-      const isGroupPage = this.config?.pageType === 'group';
-      const isSpecialPage = ['room', 'scenes', 'cameras'].includes(this.config?.pageType);
-      
-      if (isGroupPage && this.config?.deviceGroup) {
-        // Group page - set active group for highlighting using deviceGroup
-        this.chipsElement.setActiveGroup(this.config.deviceGroup);
-      } else if (isSpecialPage) {
-        // Special pages - clear active group (no highlighting)
-        this.chipsElement.setActiveGroup(undefined);
-      } else {
-        // Home page - clear active group
-        this.chipsElement.setActiveGroup(undefined);
-      }
-    }
-  }
-
-  private updateChips() {
-    if (this.chipsElement && this._hass) {
-      // Only update if hass reference is different
-      if (this.chipsElement.hass !== this._hass) {
-        this.chipsElement.hass = this._hass;
-      }
-    }
-  }
-
-  // Customization functionality is now handled by CardManager
-  private async toggleTallCard(entityId: string, areaId: string, clickedElement?: HTMLElement) {
+  private async toggleTallCard(entityId: string, areaId: string) {
     const context = this.getPageContext();
     
     // Wait for the toggle operation to complete with the correct context
     const newTallState = await this.cardManager.toggleTallCard(entityId, areaId, context);
     
     // Now update the visual to match the new state - target the specific card that was clicked
-    this.updateTallCardVisual(entityId, areaId, clickedElement, context);
+    updateTallCardVisual(this.shadowRoot!, this.cardManager, entityId, areaId, context);
     
     return newTallState;
-  }
-
-  private updateTallCardVisual(entityId: string, areaId: string, clickedElement?: HTMLElement, context?: string) {
-    // Try to find the specific card wrapper based on context and entity ID
-    let wrapper: HTMLElement | null = null;
-    
-    // Try context-specific selectors first
-    if (context === 'home' && this.config?.pageType !== 'room') {
-      // For home page, try to target the specific section based on areaId
-      if (areaId === 'favorites') {
-        wrapper = this.shadowRoot!.querySelector(`[data-area-id="favorites"] [data-entity-id="${entityId}"]`) as HTMLElement;
-      } else if (areaId === 'cameras_section') {
-        wrapper = this.shadowRoot!.querySelector(`[data-area-id="cameras_section"] [data-entity-id="${entityId}"]`) as HTMLElement;
-      } else if (areaId === 'scenes_section') {
-        wrapper = this.shadowRoot!.querySelector(`[data-area-id="scenes_section"] [data-entity-id="${entityId}"]`) as HTMLElement;
-      } else {
-        // For regular area sections, try to find the card within that specific area
-        wrapper = this.shadowRoot!.querySelector(`[data-area-id="${areaId}"] [data-entity-id="${entityId}"]`) as HTMLElement;
-      }
-    } else {
-      // For other contexts (room, cameras page, scenes page), target within the specific area
-      wrapper = this.shadowRoot!.querySelector(`[data-area-id="${areaId}"] [data-entity-id="${entityId}"]`) as HTMLElement;
-    }
-    
-    // Fallback to the old method if context-specific targeting fails
-    if (!wrapper) {
-      wrapper = this.shadowRoot!.querySelector(`[data-entity-id="${entityId}"]`) as HTMLElement;
-    }
-    
-    if (!wrapper) return;
-    
-    const shouldBeTall = this.cardManager.shouldCardBeTall(entityId, areaId, context || 'home');
-    
-    // Update the wrapper class for grid sizing
-    wrapper.classList.toggle('tall', shouldBeTall);
-    
-    // Update the card's design class
-    const cardElement = wrapper.querySelector('home-glass-card') as any;
-    if (cardElement) {
-      // Update the card's configuration
-      const currentConfig = cardElement.config || {};
-      const newConfig = { ...currentConfig, is_tall: shouldBeTall };
-      cardElement.setConfig(newConfig);
-    }
-    
-    // Update the button visual state
-    const button = wrapper.querySelector('.tall-toggle') as HTMLButtonElement;
-    if (button) {
-      button.classList.toggle('active', shouldBeTall);
-      button.innerHTML = `<ha-icon icon="mdi:${shouldBeTall ? 'arrow-collapse' : 'arrow-expand'}"></ha-icon>`;
-      button.title = shouldBeTall ? 'Switch to regular design' : 'Switch to tall design';
-    }
   }
 
   getCardSize() {
@@ -1068,24 +799,5 @@ export class HomeView extends HTMLElement {
     } catch (error) {
       console.error('Error refreshing dashboard:', error);
     }
-  }
-
-  private getScrollParent(): Element | null {
-    let el: Element | null = this;
-    while (el) {
-      // Check host element if inside shadow DOM
-      if (el instanceof ShadowRoot) {
-        el = (el as ShadowRoot).host;
-        continue;
-      }
-      if (el instanceof HTMLElement) {
-        const style = window.getComputedStyle(el);
-        if (/(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight) {
-          return el;
-        }
-      }
-      el = el.parentElement || (el.getRootNode() as ShadowRoot)?.host || null;
-    }
-    return document.scrollingElement || document.documentElement;
   }
 }
