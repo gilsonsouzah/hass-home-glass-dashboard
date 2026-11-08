@@ -2,24 +2,33 @@ import { CustomizationManager } from '../utils/CustomizationManager';
 import { CardManager } from '../utils/CardManager';
 import { DataService } from '../utils/DataService';
 import { DashboardConfig, DeviceGroup } from '../config/DashboardConfig';
-import { ScenesSection } from '../sections/ScenesSection';
 import { CamerasSection } from '../sections/CamerasSection';
 import { AreaSection } from '../sections/AreaSection';
 import { StatusSection } from '../sections/StatusSection';
 import { Entity } from '../types/types';
 import { localize } from '../utils/LocalizationService';
+import { escapeHtml } from '../utils/html';
+import { resetPage } from './pageChrome';
+
+const ROOM_GROUPS = [
+  DeviceGroup.LIGHTING,
+  DeviceGroup.CLIMATE,
+  DeviceGroup.SECURITY,
+  DeviceGroup.MEDIA,
+  DeviceGroup.WATER,
+  DeviceGroup.VACUUM,
+  DeviceGroup.ENERGY,
+  DeviceGroup.OTHER
+];
 
 export class RoomPage {
   private customizationManager?: CustomizationManager;
   private cardManager?: CardManager;
-  private scenesSection?: ScenesSection;
   private camerasSection?: CamerasSection;
   private areaSection?: AreaSection;
   private statusSection?: StatusSection;
   private _hass?: any;
   private _areaId?: string;
-  private _config?: any;
-  private _container?: HTMLElement; // Store reference to the container
 
   constructor() {
     // Regular class constructor
@@ -39,7 +48,6 @@ export class RoomPage {
   }
 
   async setConfig(config: any) {
-    this._config = config;
     this._areaId = config.areaId;
     
     // Initialize customization manager from config
@@ -53,20 +61,12 @@ export class RoomPage {
 
   private initializeSections() {
     if (this.customizationManager) {
-      this.scenesSection = new ScenesSection(this.customizationManager, this.cardManager);
       this.camerasSection = new CamerasSection(this.customizationManager, this.cardManager);
       this.areaSection = new AreaSection(this.customizationManager, this.cardManager);
       this.statusSection = new StatusSection(this.customizationManager, this.cardManager);
       
       // Note: No DragAndDropManager needed - HomeView handles drag and drop like for HomePage
     }
-  }
-
-  private createRoomTitle(areaName: string): HTMLElement {
-    const titleElement = document.createElement('h1');
-    titleElement.className = 'apple-page-title';
-    titleElement.textContent = areaName;
-    return titleElement;
   }
 
   async render(
@@ -76,24 +76,7 @@ export class RoomPage {
     hass: any,
     onTallToggle?: (entityId: string, areaId: string) => void | Promise<void | boolean>
   ): Promise<void> {
-    // Store container reference for use in save methods
-    this._container = container;
-    
-    // Remove only dynamic content, keep permanent elements (header, chips) in place
-    const permanentSelectors = ['.hg-header', '.permanent-chips'];
-    Array.from(container.children).forEach(child => {
-      const isPermanent = permanentSelectors.some(sel => child.matches(sel));
-      if (!isPermanent) child.remove();
-    });
-
-    // Add room title after header but before chips
-    const roomTitle = this.createRoomTitle(areaName);
-    const existingPermanentChips = container.querySelector('.permanent-chips');
-    if (existingPermanentChips) {
-      container.insertBefore(roomTitle, existingPermanentChips);
-    } else {
-      container.appendChild(roomTitle);
-    }
+    resetPage(container, areaName);
 
     try {
       // Fetch all data in parallel
@@ -108,23 +91,15 @@ export class RoomPage {
       
       // Filter entities for supported domains and exclude those marked for exclusion
       const supportedEntities = entities.filter(entity => {
-        const domain = entity.entity_id.split('.')[0];
-
-        // Check if this entity is in the extraAccessories list (manually added entities)
+        if (!DataService.isDiscoverable(entity, extraAccessories, (d) => DashboardConfig.isSupportedDomain(d))) {
+          return false;
+        }
         if (extraAccessories.includes(entity.entity_id)) {
           return true;
         }
 
-        // Exclude configuration and diagnostic entities from auto-discovery
-        // These should only be included via custom entities (extra accessories)
-        if (entity.entity_category === 'config' || entity.entity_category === 'diagnostic') {
-          return false;
-        }
+        const domain = entity.entity_id.split('.')[0];
 
-        if (!DashboardConfig.isSupportedDomain(domain)) {
-          return false;
-        }
-        
         // Additional filtering for switches based on showSwitches setting and includedSwitches
         if (domain === 'switch') {
           const entityState = hass.states[entity.entity_id];
@@ -146,16 +121,15 @@ export class RoomPage {
 
       // Create a separate list for status section that includes sensor domains
       const statusEntities = entities.filter(entity => {
-        // Exclude configuration and diagnostic entities from auto-discovery
-        if (entity.entity_category === 'config' || entity.entity_category === 'diagnostic') {
+        if (!DataService.isDiscoverable(entity, extraAccessories, (d) => DashboardConfig.isStatusDomain(d))) {
           return false;
         }
+        if (extraAccessories.includes(entity.entity_id)) {
+          return true;
+        }
+
         const domain = entity.entity_id.split('.')[0];
 
-        if (!DashboardConfig.isStatusDomain(domain)) {
-          return false;
-        }
-        
         // Apply same switch filtering logic for status section
         if (domain === 'switch') {
           const entityState = hass.states[entity.entity_id];
@@ -198,14 +172,7 @@ export class RoomPage {
       
       // Separate entities by device groups for organized display
       const entitiesByGroup: { [group: string]: Entity[] } = {};
-      const deviceGroups = [
-        DeviceGroup.LIGHTING,
-        DeviceGroup.CLIMATE, 
-        DeviceGroup.SECURITY,
-        DeviceGroup.MEDIA,
-        DeviceGroup.WATER,
-        DeviceGroup.OTHER
-      ];
+      const deviceGroups = ROOM_GROUPS;
 
       // Initialize groups
       deviceGroups.forEach(group => {
@@ -320,17 +287,7 @@ export class RoomPage {
       throw new Error('Required sections not initialized');
     }
 
-    // Define the order as shown in the images: Lights, Climate, Security, Speakers & TVs, Other
-    const groupOrder = [
-      DeviceGroup.LIGHTING,
-      DeviceGroup.CLIMATE,
-      DeviceGroup.SECURITY,
-      DeviceGroup.MEDIA,  // Speakers & TVs
-      DeviceGroup.OTHER   // Other (switches when enabled)
-    ];
-
-    // Render each group as a separate section
-    for (const group of groupOrder) {
+    for (const group of ROOM_GROUPS) {
       const groupEntities = entitiesByGroup[group];
       
       if (!groupEntities || groupEntities.length === 0) {
@@ -343,7 +300,7 @@ export class RoomPage {
       // Add section title
       const titleDiv = document.createElement('div');
       titleDiv.className = 'hg-section-title';
-      titleDiv.innerHTML = `<span>${typeof groupStyle.name === 'function' ? groupStyle.name() : groupStyle.name}</span>`;
+      titleDiv.innerHTML = `<span>${escapeHtml(typeof groupStyle.name === 'function' ? groupStyle.name() : groupStyle.name)}</span>`;
       container.appendChild(titleDiv);
 
       // Create a grid container for this group (non-carousel)
@@ -355,7 +312,7 @@ export class RoomPage {
       gridContainer.dataset.deviceGroup = group;
 
       // Apply saved card order using domain-specific ordering and main area ID
-      const savedOrder = this.customizationManager?.getSavedCardOrderWithContext(this._areaId!, this._areaId!, group);
+      const savedOrder = this.customizationManager?.getSavedCardOrderWithContext(this._areaId!, 'room', group);
       let orderedEntities = [...groupEntities];
       
       if (savedOrder && savedOrder.length > 0 && this.customizationManager) {
@@ -401,23 +358,16 @@ export class RoomPage {
   private createEntityCard(entityId: string, hass: any, entity: Entity): any {
     if (!this.customizationManager) return null;
 
-    const domain = entityId.split('.')[0];
     const stateObj = hass.states[entityId];
     
     if (!stateObj) return null;
 
-    // Get user customizations for this entity (for individual entity overrides like names)
-    const customizations = this.customizationManager.getCustomizations();
-    const entityCustomizations = customizations.entities?.[entityId] || null;
-    
-    // Create base card configuration
     const cardConfig: any = {
       type: 'custom:home-glass-card',
       entity: entityId,
-      name: entityCustomizations?.name || stateObj.attributes.friendly_name || entityId,
+      name: stateObj.attributes.friendly_name || entityId,
       area_id: entity.area_id,
-      is_tall: this.cardManager?.shouldCardBeTall(entityId, this._areaId || 'unknown', this._areaId!) || false,
-      ...entityCustomizations
+      is_tall: this.cardManager?.shouldCardBeTall(entityId, this._areaId || 'unknown', 'room') || false
     };
 
     return cardConfig;
@@ -462,10 +412,10 @@ export class RoomPage {
       
       if (onTallToggle) {
         // Use main area ID for tall card toggle, not the entity's area_id
-        const newTallState = await onTallToggle(cardConfig.entity, this._areaId || 'unknown');
+        await onTallToggle(cardConfig.entity, this._areaId || 'unknown');
         
         // Get the actual state from customization manager to ensure consistency
-        const actualTallState = this.cardManager?.shouldCardBeTall(cardConfig.entity, this._areaId || 'unknown', this._areaId!) || false;
+        const actualTallState = this.cardManager?.shouldCardBeTall(cardConfig.entity, this._areaId || 'unknown', 'room') || false;
         
         // Update visual state with the actual saved state
         this.updateTallCardVisual(wrapper, tallButton, cardConfig, actualTallState);
@@ -499,15 +449,5 @@ export class RoomPage {
     
     // Update card config
     cardConfig.is_tall = shouldBeTall;
-    
-    // Find the card element and refresh it like in home page
-    const cardElement = wrapper.querySelector('hui-card, ha-card, [is-card]') as any;
-    if (cardElement) {
-      // Don't trigger re-render - let the card handle its own updates
-      // Removed: cardElement.hass = cardElement.hass;
-      
-      // Don't refresh edit mode - it can cause rerenders
-      // Removed: cardElement.refreshEditMode();
-    }
   }
 }

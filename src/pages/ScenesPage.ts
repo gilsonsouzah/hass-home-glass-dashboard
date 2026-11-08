@@ -4,13 +4,14 @@ import { DashboardConfig } from '../config/DashboardConfig';
 import { Entity } from '../types/types';
 import { DragAndDropManager } from '../utils/DragAndDropManager';
 import { localize } from '../utils/LocalizationService';
+import { EditModeManager } from '../utils/EditModeManager';
+import { resetPage } from './pageChrome';
+import { sortBySavedOrder } from './homeOrdering';
 
 export class ScenesPage {
   private customizationManager?: CustomizationManager;
   private dragAndDropManager?: DragAndDropManager;
   private _hass?: any;
-  private _config?: any;
-  private _container?: HTMLElement; // Store reference to the container
 
   constructor() {
     // Regular class constructor
@@ -21,8 +22,6 @@ export class ScenesPage {
   }
 
   async setConfig(config: any) {
-    this._config = config;
-    
     // Initialize customization manager from config
     if (config.customizations && this._hass) {
       this.customizationManager = CustomizationManager.getInstance(this._hass);
@@ -30,18 +29,11 @@ export class ScenesPage {
       
       // Initialize drag and drop manager with scenes context  
       this.dragAndDropManager = new DragAndDropManager(
-        (areaId) => this.handleSaveCurrentOrder(areaId),
+        (areaId, grid) => this.handleSaveCurrentOrder(areaId, grid),
         this.customizationManager,
         'scenes' // Use scenes context for scenes page
       );
     }
-  }
-
-  private createScenesTitle(): HTMLElement {
-    const titleElement = document.createElement('h1');
-    titleElement.className = 'apple-page-title';
-    titleElement.textContent = localize('pages.scenes');
-    return titleElement;
   }
 
   async render(
@@ -49,23 +41,7 @@ export class ScenesPage {
     hass: any,
     onTallToggle?: (entityId: string, areaId: string) => void | Promise<void | boolean>
   ): Promise<void> {
-    // Store container reference for use in save methods
-    this._container = container;
-    // Remove only dynamic content, keep permanent elements (header, chips) in place
-    const permanentSelectors = ['.hg-header', '.permanent-chips'];
-    Array.from(container.children).forEach(child => {
-      const isPermanent = permanentSelectors.some(sel => child.matches(sel));
-      if (!isPermanent) child.remove();
-    });
-
-    // Add scenes title after header but before chips
-    const scenesTitle = this.createScenesTitle();
-    const existingPermanentChips = container.querySelector('.permanent-chips');
-    if (existingPermanentChips) {
-      container.insertBefore(scenesTitle, existingPermanentChips);
-    } else {
-      container.appendChild(scenesTitle);
-    }
+    resetPage(container, localize('pages.scenes'));
 
     try {
       // Get data from Home Assistant
@@ -91,43 +67,19 @@ export class ScenesPage {
         throw new Error(localize('errors.customization_manager_not_initialized'));
       }
       
-      const customizations = this.customizationManager.getCustomizations();
-      
-      // Apply entity order customizations with context
-      let sortedScenes = [...scenesEntities];
       const savedOrder = this.customizationManager.getSavedCardOrderWithContext('scenes_section', 'scenes');
-      
-      if (savedOrder.length > 0) {
-        const entityMap = new Map(scenesEntities.map(entity => [entity.entity_id, entity]));
-        const orderedScenes: Entity[] = [];
-        
-        // First, add scenes in the saved order
-        savedOrder.forEach((entityId: string) => {
-          if (entityMap.has(entityId)) {
-            orderedScenes.push(entityMap.get(entityId)!);
-            entityMap.delete(entityId);
-          }
-        });
-        
-        // Then, add any new scenes that weren't in the saved order
-        const remainingScenes = Array.from(entityMap.values());
-        orderedScenes.push(...remainingScenes);
-        
-        sortedScenes = orderedScenes;
-      }
+      const sorted = sortBySavedOrder(scenesEntities, savedOrder, (entity) => entity.entity_id);
 
       // Apply tall card settings - handled by CardManager in the new structure
-      sortedScenes.forEach(entity => {
-        // CardManager handles tall card settings in the new structure
+      sorted.forEach(entity => {
         (entity as any).is_tall = false; // Default for scenes
       });
 
       // Render all scenes in a grid layout (non-carousel)
       await this.renderScenesGrid(
         container,
-        sortedScenes,
-        hass,
-        onTallToggle
+        sorted,
+        hass
       );
       
     } catch (error) {
@@ -138,8 +90,7 @@ export class ScenesPage {
   private async renderScenesGrid(
     container: HTMLElement,
     scenesEntities: Entity[],
-    hass: any,
-    onTallToggle?: (entityId: string, areaId: string) => void | Promise<void | boolean>
+    hass: any
   ): Promise<void> {
     if (!this.customizationManager) {
       throw new Error(localize('errors.customization_manager_not_initialized'));
@@ -156,7 +107,7 @@ export class ScenesPage {
       const cardConfig = this.createEntityCard(entity.entity_id, hass, entity);
       if (cardConfig) {
         cardConfig.section_type = 'scenes';
-        await this.createAndAppendCard(cardConfig, gridContainer, hass, onTallToggle);
+        await this.createAndAppendCard(cardConfig, gridContainer, hass);
       }
     }
 
@@ -166,23 +117,16 @@ export class ScenesPage {
   private createEntityCard(entityId: string, hass: any, entity: Entity): any {
     if (!this.customizationManager) return null;
 
-    const domain = entityId.split('.')[0];
     const stateObj = hass.states[entityId];
     
     if (!stateObj) return null;
 
-    // Get user customizations for this entity (for individual entity overrides like names)
-    const customizations = this.customizationManager.getCustomizations();
-    const entityCustomizations = customizations.entities?.[entityId] || null;
-    
-    // Create base card configuration
     const cardConfig: any = {
       type: 'custom:home-glass-card',
       entity: entityId,
-      name: entityCustomizations?.name || stateObj.attributes.friendly_name || entityId,
+      name: stateObj.attributes.friendly_name || entityId,
       area_id: 'scenes_section',
-      is_tall: (entity as any).is_tall !== undefined ? (entity as any).is_tall : false, // Scenes are typically not tall by default
-      ...entityCustomizations
+      is_tall: (entity as any).is_tall !== undefined ? (entity as any).is_tall : false // Scenes are typically not tall by default
     };
 
     return cardConfig;
@@ -191,8 +135,7 @@ export class ScenesPage {
   private async createAndAppendCard(
     cardConfig: any,
     gridContainer: HTMLElement,
-    hass: any,
-    onTallToggle?: (entityId: string, areaId: string) => void | Promise<void | boolean>
+    hass: any
   ): Promise<void> {
     // Create wrapper div for the card
     const wrapper = document.createElement('div');
@@ -222,59 +165,24 @@ export class ScenesPage {
 
   public updateDragAndDrop(editMode: boolean, container: HTMLElement) {
     if (!this.dragAndDropManager) return;
-    
+
     if (editMode) {
-      // Add a small delay to ensure cards are fully rendered
+      // Wait for the cards to finish rendering
       setTimeout(() => {
         this.dragAndDropManager!.enableDragAndDrop(container);
-        // Update entity wrapper styles for edit mode
-        const entityWrappers = container.querySelectorAll('.entity-card-wrapper');
-        entityWrappers.forEach((wrapper) => {
-          const element = wrapper as HTMLElement;
-          element.classList.toggle('edit-mode', true);
-          
-          const appleHomeCard = element.querySelector('home-glass-card') as any;
-          if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
-            appleHomeCard.refreshEditMode();
-          }
-        });
+        EditModeManager.updateEntityWrapperStyles(container, true);
       }, 100);
     } else {
       this.dragAndDropManager.disableDragAndDrop(container);
-      // Update entity wrapper styles
-      const entityWrappers = container.querySelectorAll('.entity-card-wrapper');
-      entityWrappers.forEach((wrapper) => {
-        const element = wrapper as HTMLElement;
-        element.classList.toggle('edit-mode', false);
-        
-        const appleHomeCard = element.querySelector('home-glass-card') as any;
-        if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
-          appleHomeCard.refreshEditMode();
-        }
-      });
+      EditModeManager.updateEntityWrapperStyles(container, false);
     }
   }
 
-  private handleSaveCurrentOrder(areaId: string) {
-    if (!this._container) {
-      return;
-    }
-    
-    // Look for the area container within the stored container
-    const areaContainer = this._container.querySelector(`[data-area-id="${areaId}"]`);
-    if (!areaContainer) {
-      return;
-    }
+  private handleSaveCurrentOrder(areaId: string, grid: HTMLElement) {
+    const entityOrder = Array.from(grid.querySelectorAll<HTMLElement>('.entity-card-wrapper:not(.drag-placeholder)'))
+      .map((wrapper) => wrapper.dataset.entityId)
+      .filter((id): id is string => !!id);
 
-    const wrappers = areaContainer.querySelectorAll('.entity-card-wrapper:not(.drag-placeholder)');
-    const entityOrder = Array.from(wrappers).map(wrapper => {
-      const element = wrapper as HTMLElement;
-      return element.dataset.entityId || '';
-    }).filter(id => id);
-
-    // Save with 'scenes' context
-    if (this.customizationManager) {
-      this.customizationManager.saveCardOrderWithContext(areaId, entityOrder, 'scenes');
-    }
+    this.customizationManager?.saveCardOrderWithContext(areaId, entityOrder, 'scenes');
   }
 }

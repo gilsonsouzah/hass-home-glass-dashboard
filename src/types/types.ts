@@ -8,18 +8,6 @@ export interface EntityData {
   icon: string;
 }
 
-export interface Customizations {
-  areas: {
-    order?: string[];
-  };
-  entities: {
-    [areaId: string]: {
-      order?: string[];
-      tallCards?: string[];
-    };
-  };
-}
-
 export interface CardConfig {
   type: string;
   entity: string;
@@ -33,10 +21,6 @@ export interface CardConfig {
   default_icon?: string;
   camera_view?: 'live' | 'snapshot';
   refresh_interval?: number;
-}
-
-export interface DashboardInfo {
-  hass: any; // HomeAssistant instance
 }
 
 export interface Area {
@@ -79,24 +63,7 @@ export interface EntityState {
   };
 }
 
-export enum CardDesignType {
-  REGULAR = 'regular',
-  TALL = 'tall',
-  // Future design types can be added here
-  // COMPACT = 'compact',
-  // WIDE = 'wide',
-  // MINIMAL = 'minimal'
-}
-
-export interface LovelaceStrategyConfig {
-  title?: string;
-  areas?: string[];
-  entities?: string[];
-  exclude_entities?: string[];
-  exclude_areas?: string[];
-  [key: string]: any;
-}
-
-export interface LovelaceStrategy {
-  generateDashboard(config: LovelaceStrategyConfig): Promise<any>;
+/** Section implemented by the sections-data owner: refreshes an already rendered section with new hass. */
+export interface HassUpdatable {
+  update?(hass: any): void | Promise<void>;
 }

@@ -133,16 +133,6 @@ export class RTLHelper {
   }
 
   /**
-   * Get current language code
-   */
-  static getCurrentLanguage(): string {
-    if (this._currentLanguage === null) {
-      this.initialize();
-    }
-    return this._currentLanguage || 'en';
-  }
-
-  /**
    * Update document direction attribute
    */
   static updateDocumentDirection(): void {
@@ -164,64 +154,5 @@ export class RTLHelper {
    */
   static getBackIcon(): string {
     return this.isRTL() ? 'mdi:chevron-right' : 'mdi:chevron-left';
-  }
-
-  /**
-   * Get appropriate icon for forward/next navigation based on RTL
-   */
-  static getForwardIcon(): string {
-    return this.isRTL() ? 'mdi:chevron-left' : 'mdi:chevron-right';
-  }
-
-  /**
-   * Get appropriate positioning for dropdowns and popovers
-   */
-  static getDropdownAlignment(): 'left' | 'right' {
-    return this.isRTL() ? 'left' : 'right';
-  }
-
-  /**
-   * Get logical CSS property names based on RTL direction
-   */
-  static getLogicalProperty(property: string): string {
-    if (!this.isRTL()) {
-      return property;
-    }
-
-    // Map physical properties to logical ones for RTL
-    const rtlPropertyMap: Record<string, string> = {
-      'left': 'right',
-      'right': 'left',
-      'margin-left': 'margin-right',
-      'margin-right': 'margin-left',
-      'padding-left': 'padding-right',
-      'padding-right': 'padding-left',
-      'border-left': 'border-right',
-      'border-right': 'border-left',
-      'text-align: left': 'text-align: right',
-      'text-align: right': 'text-align: left',
-      'float: left': 'float: right',
-      'float: right': 'float: left'
-    };
-
-    return rtlPropertyMap[property] || property;
-  }
-
-  /**
-   * Apply RTL-aware inline styles to an element
-   */
-  static applyRTLStyles(element: HTMLElement, styles: Record<string, string>): void {
-    Object.entries(styles).forEach(([property, value]) => {
-      const logicalProperty = this.getLogicalProperty(property);
-      (element.style as any)[logicalProperty] = value;
-    });
-  }
-
-  /**
-   * Get direction-aware transform for positioning
-   */
-  static getDirectionalTransform(x: number, y: number = 0): string {
-    const adjustedX = this.isRTL() ? -x : x;
-    return `translate(${adjustedX}px, ${y}px)`;
   }
 }

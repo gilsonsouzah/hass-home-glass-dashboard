@@ -7,7 +7,10 @@ import { AreaSection } from '../sections/AreaSection';
 import { FavoritesSection } from '../sections/FavoritesSection';
 import { WeatherSection } from '../sections/WeatherSection';
 import { EnergySection } from '../sections/EnergySection';
-import { Entity, Area } from '../types/types';
+import { Entity, Area, HassUpdatable } from '../types/types';
+import { resetPage } from './pageChrome';
+import { applyHomeOrdering } from './homeOrdering';
+import { orderSections } from '../utils/sectionOrder';
 
 export class HomePage {
   private customizationManager?: CustomizationManager;
@@ -18,8 +21,6 @@ export class HomePage {
   private weatherSection?: WeatherSection;
   private energySection?: EnergySection;
   private _hass?: any;
-  private _title?: string;
-  private _config?: any;
 
   constructor() {
     // Regular class constructor
@@ -27,12 +28,11 @@ export class HomePage {
 
   set hass(hass: any) {
     this._hass = hass;
+    (this.weatherSection as HassUpdatable | undefined)?.update?.(hass);
+    (this.energySection as HassUpdatable | undefined)?.update?.(hass);
   }
 
   async setConfig(config: any) {
-    this._config = config;
-    this._title = config.title;
-
     // Initialize customization manager from config
     if (config.customizations && this._hass) {
       this.customizationManager = CustomizationManager.getInstance(this._hass);
@@ -52,34 +52,13 @@ export class HomePage {
     }
   }
 
-  private createHomeTitle(title: string): HTMLElement {
-    const titleElement = document.createElement('h1');
-    titleElement.className = 'apple-page-title';
-    titleElement.textContent = title;
-    return titleElement;
-  }
-
   async render(
     container: HTMLElement,
     hass: any,
     title: string,
     onTallToggle?: (entityId: string, areaId: string) => void | Promise<void | boolean>
   ): Promise<void> {
-    // Remove only dynamic content, keep permanent elements (header, chips) in place
-    const permanentSelectors = ['.hg-header', '.permanent-chips'];
-    Array.from(container.children).forEach(child => {
-      const isPermanent = permanentSelectors.some(sel => child.matches(sel));
-      if (!isPermanent) child.remove();
-    });
-
-    // Add home title after header but before chips
-    const homeTitle = this.createHomeTitle(title);
-    const existingPermanentChips = container.querySelector('.permanent-chips');
-    if (existingPermanentChips) {
-      container.insertBefore(homeTitle, existingPermanentChips);
-    } else {
-      container.appendChild(homeTitle);
-    }
+    resetPage(container, title);
 
     try {
       // Fetch all data in parallel
@@ -94,22 +73,14 @@ export class HomePage {
 
       // Filter entities for supported domains and exclude those marked for exclusion
       const supportedEntities = entities.filter((entity) => {
-        const domain = entity.entity_id.split('.')[0];
-
-        // Check if this entity is in the extraAccessories list (manually added entities)
+        if (!DataService.isDiscoverable(entity, extraAccessories, (d) => DashboardConfig.isSupportedDomain(d))) {
+          return false;
+        }
         if (extraAccessories.includes(entity.entity_id)) {
           return true;
         }
 
-        // Exclude configuration and diagnostic entities from auto-discovery
-        // These should only be included via custom entities (extra accessories)
-        if (entity.entity_category === 'config' || entity.entity_category === 'diagnostic') {
-          return false;
-        }
-
-        if (!DashboardConfig.isSupportedDomain(domain)) {
-          return false;
-        }
+        const domain = entity.entity_id.split('.')[0];
 
         // Additional filtering for switches based on showSwitches setting and includedSwitches
         if (domain === 'switch') {
@@ -167,12 +138,13 @@ export class HomePage {
       }
 
       const customizations = this.customizationManager.getCustomizations();
-      const customizedAreas = this.applyCustomizations(entitiesByArea, customizations);
+      const customizedAreas = applyHomeOrdering(entitiesByArea, customizations.home);
 
       // Render sections in order based on customizations
       await this.renderSectionsInOrder(
         container,
         customizedAreas,
+        areas,
         scenesEntities,
         camerasEntities,
         filteredEntities, // Pass all filtered entities for favorites
@@ -187,6 +159,7 @@ export class HomePage {
   private async renderSectionsInOrder(
     container: HTMLElement,
     entitiesByArea: { [areaId: string]: Entity[] },
+    areas: Area[],
     scenesEntities: Entity[],
     camerasEntities: Entity[],
     allEntities: Entity[],
@@ -253,40 +226,13 @@ export class HomePage {
       }
     }
 
-    // Apply section ordering
-    let orderedSectionIds: string[] = [];
-
-    if (sectionOrder.length > 0) {
-      // Use saved order
-      orderedSectionIds = sectionOrder.filter((id) => availableSections.has(id));
-
-      // Add any new sections that weren't in the saved order
-      for (const sectionId of availableSections.keys()) {
-        if (!orderedSectionIds.includes(sectionId)) {
-          // Weather/energy sections default to first position when newly added
-          if (sectionId === 'weather_section' || sectionId === 'energy_section') {
-            orderedSectionIds.unshift(sectionId);
-          } else {
-          orderedSectionIds.push(sectionId);
-        }
-      }
-      }
-    } else {
-      // Default order: weather, energy, scenes, cameras, favorites, then areas alphabetically
-      orderedSectionIds = Array.from(availableSections.keys()).sort((a, b) => {
-        if (a === 'weather_section') return -1;
-        if (b === 'weather_section') return 1;
-        if (a === 'energy_section') return -1;
-        if (b === 'energy_section') return 1;
-        if (a === 'scenes_section') return -1;
-        if (b === 'scenes_section') return 1;
-        if (a === 'cameras_section') return -1;
-        if (b === 'cameras_section') return 1;
-        if (a === 'favorites_section') return -1;
-        if (b === 'favorites_section') return 1;
-        return a.localeCompare(b);
-      });
-    }
+    const areaNames = Object.fromEntries(areas.map((area) => [area.area_id, area.name]));
+    const orderedSectionIds = orderSections(
+      Array.from(availableSections.keys()),
+      sectionOrder,
+      areaNames,
+      hass.locale?.language || hass.language
+    );
 
     // Render sections in order, pairing adjacent weather+energy in a side-by-side row
     const rendered = new Set<string>();
@@ -325,72 +271,5 @@ export class HomePage {
       await availableSections.get(sectionId)!();
       rendered.add(sectionId);
     }
-  }
-
-  private applyCustomizations(
-    entitiesByArea: { [areaId: string]: Entity[] },
-    customizations: any
-  ): { [areaId: string]: Entity[] } {
-    const result: { [areaId: string]: Entity[] } = {};
-
-    // Apply area order customizations
-    const areaIds = Object.keys(entitiesByArea);
-    let sortedAreaIds = areaIds;
-
-    if (customizations.home?.sections?.order) {
-      sortedAreaIds = [...areaIds].sort((a, b) => {
-        const aOrder = customizations.home.sections.order!.indexOf(a);
-        const bOrder = customizations.home.sections.order!.indexOf(b);
-
-        // If both areas have custom order, use it
-        if (aOrder !== -1 && bOrder !== -1) {
-          return aOrder - bOrder;
-        }
-        // If only one has custom order, prioritize it
-        if (aOrder !== -1) return -1;
-        if (bOrder !== -1) return 1;
-        // If neither has custom order, keep original order
-        return 0;
-      });
-    }
-
-    // Apply entity customizations within each area
-    for (const areaId of sortedAreaIds) {
-      const areaEntities = [...entitiesByArea[areaId]];
-      const areaCustomizations = customizations.home?.entities_order?.[areaId];
-
-      if (areaCustomizations) {
-        // Apply entity order - areaCustomizations is now the array directly
-        const entityOrder = Array.isArray(areaCustomizations) ? areaCustomizations : [];
-        if (entityOrder.length > 0) {
-          areaEntities.sort((a, b) => {
-            const aOrder = entityOrder.indexOf(a.entity_id);
-            const bOrder = entityOrder.indexOf(b.entity_id);
-
-            if (aOrder !== -1 && bOrder !== -1) {
-              return aOrder - bOrder;
-            }
-            if (aOrder !== -1) return -1;
-            if (bOrder !== -1) return 1;
-            return 0;
-          });
-        }
-      }
-
-      // Apply tall card settings from home.tall_cards
-      if (customizations.home?.tall_cards) {
-        areaEntities.forEach((entity) => {
-          if (customizations.home.tall_cards.includes(entity.entity_id)) {
-            (entity as any).is_tall = true;
-          } else if (customizations.home.tall_cards.includes(`!${entity.entity_id}`)) {
-            (entity as any).is_tall = false;
-          }
-        });
-      }
-
-      result[areaId] = areaEntities;
-    }
-
-    return result;
   }
 }
