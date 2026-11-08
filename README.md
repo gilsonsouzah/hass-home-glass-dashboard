@@ -4,6 +4,17 @@
 
 An iOS 26 "Liquid Glass" style dashboard for Home Assistant, generated automatically from your areas and devices. No YAML, no Mushroom, no card-mod.
 
+## Features
+
+- **Automatic layout** from your areas and devices: rooms, favorites, scenes, cameras, weather and energy, all reorderable.
+- **iOS 26 Liquid Glass look**: translucent tiles with specular edges, light and dark schemes that follow your HA theme, and wallpaper-aware title colors.
+- **Quick controls**: long-press a tile (or press the context-menu key) for brightness, color temperature and colors, cover position, fan speed, thermostat target and mode, or media volume and transport.
+- **Media tiles** with album artwork and a play/pause button.
+- **Home summary** under the title, e.g. "3 lights on · Front door unlocked · 22–25°C", with alerts first.
+- **Dynamic wallpaper** that follows the sun (`sun.sun`), from night to dawn, day, golden hour and dusk.
+- **Accessibility**: keyboard access to every tile, focus rings, and support for reduced motion, reduced transparency (also as a "Solid surfaces" setting) and increased contrast.
+- 10 languages.
+
 ## Install (HACS)
 
 1. HACS → ⋮ → Custom repositories → add `https://github.com/gilsonsouzah/hass-home-glass-dashboard` (category **Integration**).
