@@ -1,10 +1,12 @@
 import { CustomizationManager } from '../utils/CustomizationManager';
 import { CardManager } from '../utils/CardManager';
-import { DataService } from '../utils/DataService';
 import { Entity, CardConfig } from '../types/types';
 import { DashboardConfig } from '../config/DashboardConfig';
 import { localize } from '../utils/LocalizationService';
 import { RTLHelper } from '../utils/RTLHelper';
+import { escapeHtml } from '../utils/html';
+import { orderScenes } from './sceneOrder';
+import { setupDragScroll } from './dragScroll';
 
 export class ScenesSection {
   private customizationManager: CustomizationManager;
@@ -23,8 +25,7 @@ export class ScenesSection {
     context: string = 'home',
     enableNavigation: boolean = true
   ): Promise<void> {
-    // Sort scenes by last used (if available)
-    const sortedScenes = await this.sortScenesByLastUsed(scenesEntities, hass, 'scenes_section', context);
+    const sortedScenes = this.sortScenes(scenesEntities, hass, 'scenes_section', context);
     
     // Add scenes section title with navigation
     const titleDiv = document.createElement('div');
@@ -69,104 +70,14 @@ export class ScenesSection {
     carouselContainer.appendChild(carouselGrid);
     
     // Add click-and-drag scrolling for desktop users
-    this.setupDragScroll(carouselContainer);
+    setupDragScroll(carouselContainer);
     
     container.appendChild(carouselContainer);
   }
 
-  private async sortScenesByLastUsed(scenesEntities: Entity[], hass: any, areaId: string, context: string = 'home'): Promise<Entity[]> {
-    try {
-      // First check if there's a saved manual order for scenes
-      const savedOrder = this.customizationManager.getSavedCarouselOrderWithContext(areaId, 'scenes', context);
-      if (savedOrder && savedOrder.length > 0) {
-        // Apply saved order, similar to how regular cards are ordered
-        const entityMap = new Map(scenesEntities.map(entity => [entity.entity_id, entity]));
-        const orderedScenes: Entity[] = [];
-        
-        // First, add scenes in the saved order
-        savedOrder.forEach((entityId: string) => {
-          if (entityMap.has(entityId)) {
-            orderedScenes.push(entityMap.get(entityId)!);
-            entityMap.delete(entityId); // Remove from map to avoid duplicates
-          }
-        });
-        
-        // Then, add any new scenes that weren't in the saved order (sorted by last used)
-        const remainingScenes = Array.from(entityMap.values());
-        if (remainingScenes.length > 0) {
-          const sortedRemaining = await this.sortScenesByLastUsed(remainingScenes, hass, areaId);
-          orderedScenes.push(...sortedRemaining);
-        }
-        
-        return orderedScenes;
-      }
-      
-      // Default behavior: sort by last used
-      const entitiesWithLastUsed = await Promise.all(
-        scenesEntities.map(async (entity) => {
-          const state = hass.states[entity.entity_id];
-          let lastUsed: Date | null = null;
-          
-          // Try to get last used from state attributes
-          if (state?.attributes?.last_triggered) {
-            lastUsed = new Date(state.attributes.last_triggered);
-          } else if (state?.last_changed) {
-            lastUsed = new Date(state.last_changed);
-          } else if (state?.last_updated) {
-            lastUsed = new Date(state.last_updated);
-          }
-          
-          // If still null or epoch time, treat as never triggered
-          if (!lastUsed || lastUsed.getTime() <= 0) {
-            lastUsed = null;
-          }
-          
-          return { entity, lastUsed };
-        })
-      );
-      
-      // Sort by last used (most recent first) then by name for ties
-      entitiesWithLastUsed.sort((a, b) => {
-        // Handle null values - null should be sorted last
-        if (a.lastUsed === null && b.lastUsed === null) {
-          // Both never triggered, sort by name
-          const aState = hass.states[a.entity.entity_id];
-          const bState = hass.states[b.entity.entity_id];
-          const aName = aState?.attributes?.friendly_name || a.entity.entity_id;
-          const bName = bState?.attributes?.friendly_name || b.entity.entity_id;
-          return aName.localeCompare(bName);
-        }
-        if (a.lastUsed === null) return 1;
-        if (b.lastUsed === null) return -1;
-        
-        // Both have valid timestamps, compare them (most recent first)
-        const timeDiff = b.lastUsed.getTime() - a.lastUsed.getTime();
-        if (timeDiff !== 0) return timeDiff;
-        
-        // If same time, sort by name
-        const aState = hass.states[a.entity.entity_id];
-        const bState = hass.states[b.entity.entity_id];
-        const aName = aState?.attributes?.friendly_name || a.entity.entity_id;
-        const bName = bState?.attributes?.friendly_name || b.entity.entity_id;
-        
-        return aName.localeCompare(bName);
-      });
-      
-      return entitiesWithLastUsed.map(item => item.entity);
-    } catch (error) {
-      // Fallback to alphabetical sorting
-      const sortedEntities = [...scenesEntities].sort((a, b) => {
-        const aState = hass.states[a.entity_id];
-        const bState = hass.states[b.entity_id];
-        
-        const aName = aState?.attributes?.friendly_name || a.entity_id;
-        const bName = bState?.attributes?.friendly_name || b.entity_id;
-        
-        return aName.localeCompare(bName);
-      });
-      
-      return sortedEntities;
-    }
+  private sortScenes(scenesEntities: Entity[], hass: any, areaId: string, context: string): Entity[] {
+    const savedOrder = this.customizationManager.getSavedCarouselOrderWithContext(areaId, 'scenes', context) || [];
+    return orderScenes(scenesEntities, savedOrder, hass.states);
   }
 
   private createEntityCard(entityId: string, hass: any, entity?: Entity): CardConfig | null {
@@ -243,7 +154,7 @@ export class ScenesSection {
           }
         } else {
           cardElement = document.createElement('div');
-          cardElement.innerHTML = `<div style="color: red;">Unknown card type: ${cardConfig.type}</div>`;
+          cardElement.innerHTML = `<div style="color: red;">Unknown card type: ${escapeHtml(cardConfig.type)}</div>`;
         }
       }
       
@@ -253,15 +164,10 @@ export class ScenesSection {
       
       // Check if this is a carousel container to adjust wrapper sizing
       const isCarousel = container.classList.contains('carousel-grid');
-      const sectionType = container.dataset.sectionType;
       
       // Determine if card should be tall based on customizations
       let shouldBeTall = this.cardManager.shouldCardBeTall(cardConfig.entity, container.dataset.areaId || 'unknown', context);
       
-      // For scenes in carousel, they should follow their normal sizing
-      if (isCarousel && sectionType === 'scenes') {
-        // Keep the customization-based tall setting
-      }
       
       if (shouldBeTall) {
         wrapper.classList.add('tall');
@@ -335,80 +241,5 @@ export class ScenesSection {
     window.history.pushState(null, '', newUrl);
     const event = new Event('location-changed', { bubbles: true, composed: true });
     window.dispatchEvent(event);
-  }
-
-  /**
-   * Setup click-and-drag scrolling for desktop users
-   */
-  private setupDragScroll(container: HTMLElement): void {
-    let isDown = false;
-    let startX: number;
-    let scrollLeft: number;
-    let hasDragged = false;
-    const dragThreshold = 5; // Minimum pixels moved to consider it a drag
-
-    // Function to check if container has overflow and update cursor
-    const updateDragState = () => {
-      const hasOverflow = container.scrollWidth > container.clientWidth;
-      if (hasOverflow) {
-        container.style.cursor = 'grab';
-      } else {
-        container.style.cursor = '';
-      }
-      return hasOverflow;
-    };
-
-    // Initial check
-    setTimeout(updateDragState, 100);
-
-    container.addEventListener('mousedown', (e) => {
-      // Skip if reordering is in progress or not left button or no overflow
-      const { DragAndDropManager } = require('../utils/DragAndDropManager');
-      if (DragAndDropManager.isReordering || e.button !== 0 || !updateDragState()) return;
-      
-      isDown = true;
-      hasDragged = false;
-      container.style.cursor = 'grabbing';
-      startX = e.pageX - container.offsetLeft;
-      scrollLeft = container.scrollLeft;
-    });
-
-    container.addEventListener('mouseleave', () => {
-      isDown = false;
-      updateDragState();
-    });
-
-    container.addEventListener('mouseup', () => {
-      isDown = false;
-      updateDragState();
-    });
-
-    container.addEventListener('mousemove', (e) => {
-      // Stop if reordering started or not dragging
-      const { DragAndDropManager } = require('../utils/DragAndDropManager');
-      if (!isDown || DragAndDropManager.isReordering) {
-        if (DragAndDropManager.isReordering) isDown = false; // Reset state
-        return;
-      }
-      e.preventDefault();
-      const x = e.pageX - container.offsetLeft;
-      const walk = x - startX;
-      
-      // Mark as dragged if moved beyond threshold
-      if (Math.abs(walk) > dragThreshold) {
-        hasDragged = true;
-      }
-      
-      container.scrollLeft = scrollLeft - walk;
-    });
-
-    // Prevent click events on cards when dragging
-    container.addEventListener('click', (e) => {
-      if (hasDragged) {
-        e.preventDefault();
-        e.stopPropagation();
-        hasDragged = false;
-      }
-    }, true);
   }
 }
