@@ -12,6 +12,7 @@ import { getTotalPower, hasEnergySensors } from './energy/energyPower';
 import { energyHomeStyles } from './energy/energyHomeStyles';
 import { energyPageStyles } from './energy/energyPageStyles';
 import type { EnergyData } from './energy/types';
+import { onActivate } from './navigation';
 
 interface HomeCardLive {
   data: EnergyData;
@@ -75,8 +76,8 @@ export class EnergySection {
     this.injectStyles(container);
 
     const card = document.createElement('div');
-    card.className = 'apple-energy-card';
-    card.addEventListener('click', () => {
+    card.className = 'apple-energy-card hg-glass hg-pressable';
+    onActivate(card, () => {
       window.history.pushState(null, '', '/energy');
       window.dispatchEvent(new Event('location-changed', { bubbles: true, composed: true }));
     });

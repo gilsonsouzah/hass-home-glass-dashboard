@@ -5,7 +5,7 @@ import { DashboardConfig } from '../config/DashboardConfig';
 import { localize } from '../utils/LocalizationService';
 import { RTLHelper } from '../utils/RTLHelper';
 import { escapeHtml } from '../utils/html';
-import { navigateToDashboardPath } from './navigation';
+import { navigateToDashboardPath, onActivate } from './navigation';
 import { setupDragScroll } from './dragScroll';
 import { splitBySavedOrder } from './carouselOrder';
 
@@ -40,10 +40,7 @@ export class CamerasSection {
       clickableWrapper.className = 'clickable-section-title';
       clickableWrapper.innerHTML = `<span>${localize('section_titles.cameras')}</span><ha-icon icon="${RTLHelper.isRTL() ? 'mdi:chevron-left' : 'mdi:chevron-right'}" class="section-arrow"></ha-icon>`;
       
-      // Add click handler to the wrapper
-      clickableWrapper.addEventListener('click', () => {
-        navigateToDashboardPath('cameras');
-      });
+      onActivate(clickableWrapper, () => navigateToDashboardPath('cameras'));
       
       titleDiv.appendChild(clickableWrapper);
     } else {
@@ -156,7 +153,7 @@ export class CamerasSection {
           }
         } else {
           cardElement = document.createElement('div');
-          cardElement.innerHTML = `<div style="color: red;">Unknown card type: ${escapeHtml(cardConfig.type)}</div>`;
+          cardElement.innerHTML = `<div style="color: var(--hg-color-red);">Unknown card type: ${escapeHtml(cardConfig.type)}</div>`;
         }
       }
       

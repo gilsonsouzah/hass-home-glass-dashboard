@@ -1,27 +1,19 @@
+import { glassCSS } from '../../styles/glass';
+
 export const energyHomeStyles = `
+${glassCSS}
+
 /* ========== ENERGY CARD (Home - Liquid Glass) ========== */
 .apple-energy-card {
-  border-radius: var(--apple-card-radius, 22px);
+  border-radius: var(--hg-radius-tile);
   padding: 20px 22px 16px;
-  margin-top: 20px;
-  color: white;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-  -webkit-tap-highlight-color: transparent;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-  position: relative;
+  margin-top: var(--hg-section-gap);
+  color: var(--hg-label);
+  font-family: var(--hg-font);
   overflow: hidden;
-  background: var(--apple-card-bg-inactive, rgba(0, 0, 0, 0.3));
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-}
-
-.apple-energy-card:active {
-  transform: scale(0.99);
 }
 
 /* ========== HEADER ========== */
@@ -40,19 +32,19 @@ export const energyHomeStyles = `
 
 .energy-icon {
   --mdc-icon-size: 20px;
-  color: #4ADE80;
+  color: var(--hg-color-green);
 }
 
 .energy-label {
-  font-size: 14px;
+  font-size: var(--hg-text-subhead-size);
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--hg-label-secondary);
 }
 
 .energy-header-right {
-  font-size: 14px;
+  font-size: var(--hg-text-subhead-size);
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--hg-label-tertiary);
 }
 
 /* ========== VALUES ========== */
@@ -68,13 +60,14 @@ export const energyHomeStyles = `
   font-weight: 200;
   line-height: 1;
   letter-spacing: -2px;
-  color: white;
+  font-variant-numeric: tabular-nums;
 }
 
 .energy-today-total {
-  font-size: 16px;
+  font-size: var(--hg-text-callout-size);
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--hg-label-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ========== BAR CHART ========== */
@@ -99,16 +92,15 @@ export const energyHomeStyles = `
 
 .energy-bar-fill {
   width: 100%;
-  background: #4ADE80;
+  background: var(--hg-color-green);
   border-radius: 2px 2px 0 0;
   min-height: 1px;
-  transition: height 0.3s ease;
+  transition: height var(--hg-dur) var(--hg-ease-standard);
   opacity: 0.7;
 }
 
 .energy-bar.current .energy-bar-fill {
   opacity: 1;
-  background: #30D158;
 }
 
 .energy-bar.future .energy-bar-fill {
@@ -125,13 +117,14 @@ export const energyHomeStyles = `
 .energy-chart-label {
   position: absolute;
   transform: translateX(-50%);
-  font-size: 10px;
+  font-size: var(--hg-text-caption2-size);
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--hg-label-tertiary);
+  font-variant-numeric: tabular-nums;
 }
 
 .energy-chart-label.now {
-  color: #4ADE80;
+  color: var(--hg-color-green);
   font-weight: 600;
 }
 
@@ -140,7 +133,7 @@ export const energyHomeStyles = `
   display: flex;
   gap: 20px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--hg-separator);
   flex-wrap: wrap;
 }
 
@@ -153,9 +146,9 @@ export const energyHomeStyles = `
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: var(--hg-text-subhead-size);
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
+  font-variant-numeric: tabular-nums;
 }
 
 .energy-extra-icon {
@@ -163,23 +156,23 @@ export const energyHomeStyles = `
 }
 
 .energy-extra-icon.solar {
-  color: #FFD60A;
+  color: var(--hg-color-yellow);
 }
 
 .energy-extra-icon.battery {
-  color: #4ADE80;
+  color: var(--hg-color-green);
 }
 
 .energy-extra-icon.gas {
-  color: #FF9F0A;
+  color: var(--hg-color-orange);
 }
 
 .energy-extra-sub {
-  font-size: 12px;
+  font-size: var(--hg-text-caption1-size);
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--hg-label-tertiary);
   margin-top: 2px;
-  margin-left: 22px;
+  margin-inline-start: 22px;
 }
 
 `;

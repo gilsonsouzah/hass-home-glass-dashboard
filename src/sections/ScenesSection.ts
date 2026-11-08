@@ -5,7 +5,7 @@ import { DashboardConfig } from '../config/DashboardConfig';
 import { localize } from '../utils/LocalizationService';
 import { RTLHelper } from '../utils/RTLHelper';
 import { escapeHtml } from '../utils/html';
-import { navigateToDashboardPath } from './navigation';
+import { navigateToDashboardPath, onActivate } from './navigation';
 import { orderScenes } from './carouselOrder';
 import { setupDragScroll } from './dragScroll';
 
@@ -38,10 +38,7 @@ export class ScenesSection {
       clickableWrapper.className = 'clickable-section-title';
       clickableWrapper.innerHTML = `<span>${localize('section_titles.scenes')}</span><ha-icon icon="${RTLHelper.isRTL() ? 'mdi:chevron-left' : 'mdi:chevron-right'}" class="section-arrow"></ha-icon>`;
       
-      // Add click handler to the wrapper
-      clickableWrapper.addEventListener('click', () => {
-        navigateToDashboardPath('scenes');
-      });
+      onActivate(clickableWrapper, () => navigateToDashboardPath('scenes'));
       
       titleDiv.appendChild(clickableWrapper);
     } else {
@@ -145,7 +142,7 @@ export class ScenesSection {
           }
         } else {
           cardElement = document.createElement('div');
-          cardElement.innerHTML = `<div style="color: red;">Unknown card type: ${escapeHtml(cardConfig.type)}</div>`;
+          cardElement.innerHTML = `<div style="color: var(--hg-color-red);">Unknown card type: ${escapeHtml(cardConfig.type)}</div>`;
         }
       }
       

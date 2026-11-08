@@ -1,6 +1,8 @@
 import { CustomizationManager } from '../utils/CustomizationManager';
 import { localize } from '../utils/LocalizationService';
 import { splitForecast, type ForecastDay } from './weatherForecast';
+import { onActivate } from './navigation';
+import { glassCSS } from '../styles/glass';
 
 // Basmilius Meteocons animated SVG icon URLs (fill style)
 const METEOCONS_BASE = 'https://basmilius.github.io/weather-icons/production/fill/all';
@@ -38,14 +40,13 @@ const MDI_ICONS: Record<string, string> = {
 
 // Temperature-to-color mapping for forecast bars (Apple Weather style)
 function tempToColor(temp: number): string {
-  if (temp <= 0)  return '#4FC3F7'; // freezing - light blue
-  if (temp <= 10) return '#29B6F6'; // cold - blue
-  if (temp <= 15) return '#26C6DA'; // cool - teal
-  if (temp <= 20) return '#66BB6A'; // mild - green
-  if (temp <= 25) return '#FFEE58'; // warm - yellow
-  if (temp <= 30) return '#FFA726'; // hot - orange
-  if (temp <= 35) return '#EF5350'; // very hot - red
-  return '#D32F2F';                 // extreme - dark red
+  if (temp <= 0)  return 'var(--hg-color-cyan)';
+  if (temp <= 10) return 'var(--hg-color-blue)';
+  if (temp <= 15) return 'var(--hg-color-teal)';
+  if (temp <= 20) return 'var(--hg-color-green)';
+  if (temp <= 25) return 'var(--hg-color-yellow)';
+  if (temp <= 30) return 'var(--hg-color-orange)';
+  return 'var(--hg-color-red)';
 }
 
 function isNightTime(hass: any): boolean {
@@ -137,8 +138,8 @@ export class WeatherSection {
     const lang = hass.locale?.language || hass.language || 'en';
 
     const card = document.createElement('div');
-    card.className = 'apple-weather-card';
-    card.addEventListener('click', () => {
+    card.className = 'apple-weather-card hg-glass hg-pressable';
+    onActivate(card, () => {
       card.dispatchEvent(new CustomEvent('hass-more-info', {
         detail: { entityId: weatherEntity }, bubbles: true, composed: true,
       }));
@@ -428,28 +429,21 @@ export class WeatherSection {
     const style = document.createElement('style');
     style.id = 'apple-weather-section-styles';
     style.textContent = `
-      /* ========== WEATHER CARD (Liquid Glass) ========== */
+      ${glassCSS}
+
       .apple-weather-card {
-        border-radius: var(--apple-card-radius, 22px);
+        border-radius: var(--hg-radius-tile);
         padding: 20px 22px 16px;
-        margin-top: 20px;
-        color: white;
-        cursor: pointer;
-        transition: transform 0.2s ease;
-        -webkit-tap-highlight-color: transparent;
-        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-        position: relative;
+        margin-top: var(--hg-section-gap);
+        color: var(--hg-label);
+        font-family: var(--hg-font);
         overflow: hidden;
-        background: var(--apple-card-bg-inactive, rgba(0, 0, 0, 0.3));
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
         width: fit-content;
         max-width: 100%;
         box-sizing: border-box;
       }
 
-      /* Subtle condition-aware color tint */
+      /* Condition tint stays under the content; the specular edge (::before) sits above it. */
       .apple-weather-card::after {
         content: '';
         position: absolute;
@@ -459,11 +453,6 @@ export class WeatherSection {
         pointer-events: none;
       }
 
-      .apple-weather-card:active {
-        transform: scale(0.99);
-      }
-
-      /* ========== INNER LAYOUT: side-by-side on desktop, stacked on mobile ========== */
       .weather-card-inner {
         display: flex;
         flex-direction: row;
@@ -472,21 +461,19 @@ export class WeatherSection {
         position: relative;
       }
 
-      /* ========== CLOCK SIDE ========== */
       .weather-clock-side {
         flex-shrink: 0;
         display: flex;
         flex-direction: column;
         justify-content: center;
         min-width: 0;
-        padding-right: 24px;
-        border-right: 1px solid rgba(255, 255, 255, 0.1);
+        padding-inline-end: 24px;
+        border-inline-end: 1px solid var(--hg-separator);
       }
 
       .weather-clock-time {
         font-size: 48px;
         font-weight: 600;
-        color: white;
         line-height: 1.1;
         letter-spacing: -1px;
         font-variant-numeric: tabular-nums;
@@ -494,22 +481,19 @@ export class WeatherSection {
       }
 
       .weather-clock-date {
-        font-size: 15px;
-        font-weight: 400;
-        color: rgba(255, 255, 255, 0.55);
+        font-size: var(--hg-text-subhead-size);
+        font-weight: var(--hg-text-subhead-weight);
+        color: var(--hg-label-secondary);
         margin-top: 4px;
-        letter-spacing: 0.2px;
         text-transform: capitalize;
         white-space: nowrap;
       }
 
-      /* ========== WEATHER CONTENT SIDE ========== */
       .weather-content-side {
         flex: 1;
         min-width: 0;
       }
 
-      /* ========== HERO ROW ========== */
       .weather-hero {
         display: flex;
         align-items: center;
@@ -524,7 +508,7 @@ export class WeatherSection {
         display: flex;
         align-items: center;
         justify-content: center;
-        filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+        filter: drop-shadow(0 2px 8px color-mix(in srgb, black 30%, transparent));
       }
 
       .weather-icon-img {
@@ -535,7 +519,7 @@ export class WeatherSection {
 
       .weather-icon-fallback {
         --mdc-icon-size: 48px;
-        color: white;
+        color: var(--hg-label);
       }
 
       .weather-hero-info {
@@ -547,39 +531,37 @@ export class WeatherSection {
         font-weight: 100;
         line-height: 1;
         letter-spacing: -2px;
+        font-variant-numeric: tabular-nums;
         position: relative;
       }
 
       .weather-temp-unit {
-        font-size: 16px;
+        font-size: var(--hg-text-callout-size);
         font-weight: 300;
         letter-spacing: 0;
         vertical-align: super;
-        margin-left: 1px;
+        margin-inline-start: 1px;
         opacity: 0.7;
       }
 
       .weather-condition {
-        font-size: 15px;
+        font-size: var(--hg-text-subhead-size);
         font-weight: 500;
-        color: rgba(255, 255, 255, 0.9);
         margin-top: 2px;
         text-transform: capitalize;
       }
 
       .weather-hi-lo {
-        font-size: 13px;
-        font-weight: 400;
-        color: rgba(255, 255, 255, 0.55);
+        font-size: var(--hg-text-footnote-size);
+        color: var(--hg-label-secondary);
         margin-top: 1px;
-        letter-spacing: 0.3px;
+        font-variant-numeric: tabular-nums;
       }
 
-      /* ========== DETAIL PILLS ========== */
       .weather-details {
         display: flex;
-        gap: 6px;
-        margin-top: 10px;
+        gap: var(--hg-chip-gap);
+        margin-top: var(--hg-card-gap);
         flex-wrap: wrap;
       }
 
@@ -587,24 +569,23 @@ export class WeatherSection {
         display: flex;
         align-items: center;
         gap: 4px;
-        background: rgba(255, 255, 255, 0.12);
-        border-radius: 20px;
+        background: var(--hg-fill);
+        border-radius: var(--hg-radius-chip);
         padding: 4px 10px;
-        font-size: 12px;
+        font-size: var(--hg-text-caption1-size);
         font-weight: 500;
-        color: rgba(255, 255, 255, 0.85);
+        font-variant-numeric: tabular-nums;
       }
 
       .weather-detail-pill ha-icon {
         --mdc-icon-size: 14px;
-        color: rgba(255, 255, 255, 0.65);
+        color: var(--hg-label-secondary);
       }
 
-      /* ========== FORECAST (full width below both columns) ========== */
       .weather-forecast {
         margin-top: 14px;
         padding-top: 14px;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        border-top: 1px solid var(--hg-separator);
         display: flex;
         flex-direction: column;
         gap: 6px;
@@ -616,13 +597,13 @@ export class WeatherSection {
         align-items: center;
         gap: 8px;
         height: 26px;
+        font-variant-numeric: tabular-nums;
       }
 
       .forecast-day-name {
         width: 34px;
-        font-size: 13px;
+        font-size: var(--hg-text-footnote-size);
         font-weight: 500;
-        color: rgba(255, 255, 255, 0.85);
         text-transform: capitalize;
         flex-shrink: 0;
       }
@@ -632,30 +613,29 @@ export class WeatherSection {
         height: 24px;
         flex-shrink: 0;
         object-fit: contain;
-        filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+        filter: drop-shadow(0 1px 2px color-mix(in srgb, black 20%, transparent));
       }
 
       .forecast-icon-fallback {
         --mdc-icon-size: 18px;
-        color: rgba(255, 255, 255, 0.8);
+        color: var(--hg-label-secondary);
+      }
+
+      .forecast-temp-low,
+      .forecast-temp-high {
+        width: 28px;
+        font-size: var(--hg-text-footnote-size);
+        flex-shrink: 0;
       }
 
       .forecast-temp-low {
-        width: 28px;
-        text-align: right;
-        font-size: 13px;
-        font-weight: 400;
-        color: rgba(255, 255, 255, 0.5);
-        flex-shrink: 0;
+        text-align: end;
+        color: var(--hg-label-secondary);
       }
 
       .forecast-temp-high {
-        width: 28px;
-        text-align: left;
-        font-size: 13px;
+        text-align: start;
         font-weight: 500;
-        color: rgba(255, 255, 255, 0.95);
-        flex-shrink: 0;
       }
 
       .forecast-bar-wrap {
@@ -668,8 +648,8 @@ export class WeatherSection {
       .forecast-bar-bg {
         position: absolute;
         inset: 0;
-        background: rgba(255, 255, 255, 0.12);
-        border-radius: 2px;
+        background: var(--hg-fill);
+        border-radius: var(--hg-radius-chip);
         overflow: hidden;
       }
 
@@ -677,11 +657,10 @@ export class WeatherSection {
         position: absolute;
         top: 0;
         bottom: 0;
-        border-radius: 2px;
-        transition: width 0.6s ease, left 0.6s ease;
+        border-radius: var(--hg-radius-chip);
+        transition: width var(--hg-dur-slow) var(--hg-ease-standard), left var(--hg-dur-slow) var(--hg-ease-standard);
       }
 
-      /* ========== RESPONSIVE: stacked on mobile ========== */
       @container home-glass-view (max-width: 555px) {
         .apple-weather-card {
           width: 100%;
@@ -697,10 +676,10 @@ export class WeatherSection {
         }
 
         .weather-clock-side {
-          padding-right: 0;
-          border-right: none;
+          padding-inline-end: 0;
+          border-inline-end: none;
           padding-bottom: 10px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          border-bottom: 1px solid var(--hg-separator);
           width: 100%;
           align-items: center;
         }
@@ -711,10 +690,7 @@ export class WeatherSection {
           align-items: center;
         }
 
-        .weather-hero {
-          justify-content: center;
-        }
-
+        .weather-hero,
         .weather-details {
           justify-content: center;
         }
@@ -724,7 +700,6 @@ export class WeatherSection {
         }
 
         .weather-clock-date {
-          font-size: 14px;
           margin-top: 2px;
         }
 
@@ -737,19 +712,6 @@ export class WeatherSection {
           font-size: 36px;
         }
 
-        .weather-condition {
-          font-size: 14px;
-        }
-
-        .weather-hi-lo {
-          font-size: 12px;
-        }
-
-        .weather-detail-pill {
-          font-size: 11px;
-          padding: 3px 9px;
-        }
-
         .weather-forecast {
           display: none;
         }
@@ -759,22 +721,12 @@ export class WeatherSection {
         .weather-clock-time {
           font-size: 32px;
         }
-        .weather-clock-date {
-          font-size: 13px;
-        }
         .weather-temp {
           font-size: 30px;
         }
         .weather-icon-wrap {
           width: 50px;
           height: 50px;
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .apple-weather-card,
-        .forecast-bar-fill {
-          transition: none !important;
         }
       }
     `;

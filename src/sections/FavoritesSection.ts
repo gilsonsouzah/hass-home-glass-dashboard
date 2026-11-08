@@ -117,7 +117,7 @@ export class FavoritesSection {
           }
         } else {
           cardElement = document.createElement('div');
-          cardElement.innerHTML = `<div style="color: red;">Unknown card type: ${escapeHtml(cardConfig.type)}</div>`;
+          cardElement.innerHTML = `<div style="color: var(--hg-color-red);">Unknown card type: ${escapeHtml(cardConfig.type)}</div>`;
         }
       }
       

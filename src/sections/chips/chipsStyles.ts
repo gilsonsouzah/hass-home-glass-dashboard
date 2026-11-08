@@ -1,22 +1,23 @@
+import { glassCSS } from '../../styles/glass';
+
 export const chipsStyles = (mediaActiveIconColor: string) => `
+${glassCSS}
+
 :host {
   --media-active-icon-color: ${mediaActiveIconColor};
-  --chip-background-color: var(--apple-chip-bg-inactive, rgba(56, 56, 56, 0.46));
 }
 
-/* Match StatusSection structure exactly */
 .apple-chips-section {
   display: block;
   margin-top: 8px;
   width: 100%;
 }
 
-/* Use identical structure as status-carousel-container */
 .chips-carousel-container {
   overflow-x: auto;
   overflow-y: hidden;
-  margin-inline-start: calc(-1 * var(--apple-page-padding, 22px));
-  margin-inline-end: calc(-1 * var(--apple-page-padding, 22px));
+  margin-inline-start: calc(-1 * var(--hg-page-padding));
+  margin-inline-end: calc(-1 * var(--hg-page-padding));
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -28,16 +29,15 @@ export const chipsStyles = (mediaActiveIconColor: string) => `
 
 .chips-grid {
   display: inline-flex;
-  gap: 10px;
+  gap: var(--hg-card-gap);
   align-items: center;
-  padding-inline-start: var(--apple-page-padding, 22px);
-  padding-inline-end: var(--apple-page-padding, 22px);
+  padding-inline-start: var(--hg-page-padding);
+  padding-inline-end: var(--hg-page-padding);
   min-width: 100%;
   box-sizing: border-box;
-  height: 44px;
+  height: var(--hg-hit-min);
 }
 
-/* RTL support */
 .chips-carousel-container.rtl {
   direction: rtl;
 }
@@ -45,8 +45,6 @@ export const chipsStyles = (mediaActiveIconColor: string) => `
 .chips-carousel-container.ltr {
   direction: ltr;
 }
-
-/* Chip drag placeholder styling */
 
 .chip-wrapper {
   flex-shrink: 0;
@@ -58,80 +56,73 @@ export const chipsStyles = (mediaActiveIconColor: string) => `
   touch-action: none;
 }
 
-/* Drag placeholder for chip wrappers */
 .chip-wrapper.drag-placeholder {
   background: transparent !important;
   border: none !important;
   opacity: 1;
   pointer-events: none;
-  /* Keep the same size as the original chip to maintain layout */
   display: flex;
   align-items: center;
-  min-height: var(--apple-chip-height, 32px);
+  min-height: var(--hg-chip-height);
 }
 
 .chip {
   display: flex;
   align-items: center;
-  gap: var(--apple-chip-gap, 6px);
-  padding: var(--apple-chip-padding, 3px 16px 3px 8px);
-  border-radius: 50px;
-  background: var(--chip-background-color);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  color: white;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
-  cursor: pointer;
-  transition: background-color 0.2s ease, opacity 0.2s ease;
+  gap: var(--hg-chip-gap);
+  padding: var(--hg-chip-padding);
+  min-height: var(--hg-chip-height);
+  border-radius: var(--hg-radius-chip);
+  color: var(--hg-label);
+  font-family: var(--hg-font);
   user-select: none;
   -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  min-height: var(--apple-chip-height, 32px);
   white-space: nowrap;
-  position: relative; /* Ensure proper positioning during drag */
 }
 
-/* RTL chips - swap left/right padding */
+/* Keeps the compact look while the tap target reaches --hg-hit-min. */
+.chip::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block: min(0px, calc((100% - var(--hg-hit-min)) / 2));
+}
+
 .chips-carousel-container.rtl .chip {
   padding: 3px 8px 3px 16px;
 }
 
-/* Ensure chips maintain their position during drag operations */
 .chip-wrapper:not(.dragging) {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--hg-dur-slow) var(--hg-ease-standard);
 }
 
 .chip-wrapper.dragging {
-  /* Dragging styles are applied via inline styles in DragAndDropManager */
-  animation: none !important; /* Disable shake animation during drag */
+  animation: none !important;
 }
 
 .chip.active {
-  background: var(--apple-chip-bg-active, rgba(255, 255, 255, 0.9)) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--hg-fill-active);
+  color: var(--hg-label-on-active);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
-.chip.active .chip-group-name {
-  color: var(--apple-text-active, #1f1f1f) !important;
+.chip-status {
+  color: var(--hg-label-secondary);
 }
 
 .chip.active .chip-status {
-  color: rgba(31, 31, 31, 0.7) !important;
+  color: color-mix(in srgb, var(--hg-label-on-active) 70%, transparent);
 }
 
-/* Active media chip icon color */
-.chip.active[data-group="media"] .chip-icon {
-  color: var(--media-active-icon-color) !important;
-}
-
+.chip.active[data-group="media"] .chip-icon,
 .chip.active[data-group="media"] .chip-icon ha-icon {
   color: var(--media-active-icon-color) !important;
 }
 
 .chip-icon {
-  width: var(--apple-chip-icon-size, 24px);
-  height: var(--apple-chip-icon-size, 24px);
+  width: var(--hg-chip-icon-size);
+  height: var(--hg-chip-icon-size);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -141,9 +132,9 @@ export const chipsStyles = (mediaActiveIconColor: string) => `
 }
 
 .chip-icon ha-icon {
-  width: var(--apple-chip-icon-size, 24px);
-  height: var(--apple-chip-icon-size, 24px);
-  --mdc-icon-size: var(--apple-chip-icon-size, 24px);
+  width: var(--hg-chip-icon-size);
+  height: var(--hg-chip-icon-size);
+  --mdc-icon-size: var(--hg-chip-icon-size);
   color: var(--chip-icon-color);
   display: flex;
   align-items: center;
@@ -153,107 +144,36 @@ export const chipsStyles = (mediaActiveIconColor: string) => `
 .chip-content {
   display: flex;
   flex-direction: column;
-  gap: 0px;
 }
 
 .chip-group-name {
-  font-size: var(--apple-chip-name-size, 13px);
-  font-weight: 600;
-  color: white;
+  font-size: var(--hg-text-footnote-size);
+  font-weight: var(--hg-text-headline-weight);
   line-height: 1.2;
   letter-spacing: -0.2px;
 }
 
 .chip-status {
-  font-size: var(--apple-chip-status-size, 11px);
+  font-size: var(--hg-text-caption2-size);
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.7);
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Responsive chip sizing - uses CSS variables from LiquidGlassStyles.ts */
-@media (max-width: 479px) {
-  .chips-grid {
-    gap: var(--apple-chip-gap, 8px);
-  }
-
-  .chip {
-    padding: var(--apple-chip-padding, 4px 14px 4px 8px);
-    min-height: var(--apple-chip-height, 32px);
-  }
-
-  .chip-icon {
-    width: var(--apple-chip-icon-size, 20px);
-    height: var(--apple-chip-icon-size, 20px);
-  }
-
-  .chip-icon ha-icon {
-    width: var(--apple-chip-icon-size, 20px);
-    height: var(--apple-chip-icon-size, 20px);
-    --mdc-icon-size: var(--apple-chip-icon-size, 20px);
-  }
-
-  .chip-group-name {
-    font-size: var(--apple-chip-name-size, 13px);
-  }
-
-  .chip-status {
-    font-size: var(--apple-chip-status-size, 11px);
-  }
-}
-
-/* Extra small screens */
 @media (max-width: 359px) {
-  .chips-grid {
-    gap: 6px;
-  }
-
   .chip {
     padding: 3px 12px 3px 6px;
     min-height: 30px;
-    gap: 6px;
   }
 
-  .chip-icon {
-    width: var(--apple-chip-icon-size, 18px);
-    height: var(--apple-chip-icon-size, 18px);
-  }
-
-  .chip-icon ha-icon {
-    width: var(--apple-chip-icon-size, 18px);
-    height: var(--apple-chip-icon-size, 18px);
-    --mdc-icon-size: var(--apple-chip-icon-size, 18px);
-  }
-
-  .chip-group-name {
-    font-size: var(--apple-chip-name-size, 12px);
-  }
-
-  .chip-status {
-    font-size: 10px;
-  }
-}
-
-/* RTL chips on small screens */
-@media (max-width: 479px) {
-  .chips-carousel-container.rtl .chip {
-    padding: 4px 8px 4px 14px;
-  }
-}
-
-@media (max-width: 359px) {
   .chips-carousel-container.rtl .chip {
     padding: 3px 6px 3px 12px;
   }
 }
 
-/* Reduce motion for accessibility */
 @media (prefers-reduced-motion: reduce) {
   .chip-wrapper.edit-mode {
     animation: none !important;
-  }
-  .chip, .chip-wrapper {
-    transition: none !important;
   }
 }
 

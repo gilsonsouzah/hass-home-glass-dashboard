@@ -18,3 +18,14 @@ export function navigateToDashboardPath(path: string): void {
   window.history.pushState(null, '', url);
   window.dispatchEvent(new Event('location-changed', { bubbles: true, composed: true }));
 }
+
+export function onActivate(el: HTMLElement, handler: () => void): void {
+  el.setAttribute('role', 'button');
+  el.tabIndex = 0;
+  el.addEventListener('click', handler);
+  el.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    handler();
+  });
+}
