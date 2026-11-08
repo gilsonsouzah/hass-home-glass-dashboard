@@ -3,6 +3,7 @@ import { localize } from '../utils/LocalizationService';
 import { LiquidGlassClasses } from '../utils/LiquidGlassStyles';
 import type { HomeSettingsData } from './settingsData';
 import { PRESETS_CSS, PRESETS_STYLE_ID } from './settingsStyles';
+import { openModal } from './modalStack';
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
@@ -58,7 +59,8 @@ function ensurePresetStyles(): void {
   document.head.appendChild(style);
 }
 
-function closePresetsModal(presetsModal: HTMLElement): void {
+function closePresetsModal(presetsModal: HTMLElement, release: () => void): void {
+  release();
   presetsModal.classList.remove('show');
 
   setTimeout(() => {
@@ -73,22 +75,22 @@ export function openPresetsView(temp: HomeSettingsData, onChange: () => void): v
   presetsModal.className = 'presets-selection-modal';
 
   presetsModal.innerHTML = `
-      <div class="modal-backdrop"></div>
-      <div class="modal-content presets-content">
+      <div class="modal-backdrop" aria-hidden="true"></div>
+      <div class="modal-content presets-content hg-glass--thick" role="dialog" aria-modal="true" aria-labelledby="hg-presets-title">
         <div class="modal-header">
-          <button class="modal-cancel ${LiquidGlassClasses.modalCancel}">
-            <ha-icon icon="mdi:close"></ha-icon>
+          <button class="modal-cancel ${LiquidGlassClasses.modalCancel}" aria-label="${localize('ui_actions.cancel')}">
+            <ha-icon icon="mdi:close" aria-hidden="true"></ha-icon>
           </button>
-          <h2>${localize('ui_actions.choose_wallpaper')}</h2>
-          <button class="modal-done ${LiquidGlassClasses.modalDone}">
-            <ha-icon icon="mdi:check"></ha-icon>
+          <h2 id="hg-presets-title">${localize('ui_actions.choose_wallpaper')}</h2>
+          <button class="modal-done ${LiquidGlassClasses.modalDone}" aria-label="${localize('ui_actions.done')}">
+            <ha-icon icon="mdi:check" aria-hidden="true"></ha-icon>
           </button>
         </div>
         <div class="modal-body">
           <div class="presets-grid">
             ${BackgroundManager.getPresetNames().map(presetName => `
               <div class="preset-option ${temp.backgroundType === 'preset' && temp.presetBackground === presetName ? 'selected' : ''}"
-                   data-preset="${presetName}">
+                   data-preset="${presetName}" role="button" tabindex="0" aria-pressed="${temp.backgroundType === 'preset' && temp.presetBackground === presetName}">
                 <div class="preset-preview" style="background: ${BackgroundManager.getPresetBackground(presetName)}"></div>
                 <div class="preset-name">${formatPresetName(presetName)}</div>
               </div>
@@ -100,6 +102,7 @@ export function openPresetsView(temp: HomeSettingsData, onChange: () => void): v
 
   ensurePresetStyles();
   document.body.appendChild(presetsModal);
+  let release = () => {};
 
   const original = {
     backgroundType: temp.backgroundType,
@@ -110,14 +113,14 @@ export function openPresetsView(temp: HomeSettingsData, onChange: () => void): v
   const revert = () => {
     Object.assign(temp, original);
     onChange();
-    closePresetsModal(presetsModal);
+    closePresetsModal(presetsModal, release);
   };
 
   presetsModal.querySelector('.modal-cancel')?.addEventListener('click', revert);
   presetsModal.querySelector('.modal-backdrop')?.addEventListener('click', revert);
   presetsModal.querySelector('.modal-done')?.addEventListener('click', () => {
     onChange();
-    closePresetsModal(presetsModal);
+    closePresetsModal(presetsModal, release);
   });
 
   // Selecting does not close: the checkmark confirms.
@@ -130,11 +133,24 @@ export function openPresetsView(temp: HomeSettingsData, onChange: () => void): v
       temp.backgroundType = 'preset';
       temp.presetBackground = preset;
 
-      presetsModal.querySelectorAll('.preset-option').forEach((opt) => opt.classList.remove('selected'));
+      presetsModal.querySelectorAll('.preset-option').forEach((opt) => {
+        opt.classList.remove('selected');
+        opt.setAttribute('aria-pressed', 'false');
+      });
       target.classList.add('selected');
+      target.setAttribute('aria-pressed', 'true');
       onChange();
     });
+    option.addEventListener('keydown', (e) => {
+      const key = (e as KeyboardEvent).key;
+      if (key === 'Enter' || key === ' ') {
+        e.preventDefault();
+        (e.currentTarget as HTMLElement).click();
+      }
+    });
   });
+
+  release = openModal(presetsModal, revert);
 
   requestAnimationFrame(() => presetsModal.classList.add('show'));
 }

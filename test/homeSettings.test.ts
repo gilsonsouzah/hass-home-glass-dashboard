@@ -116,3 +116,19 @@ test('results are capped at 10', () => {
   const many: Catalog = { available: Array.from({ length: 25 }, (_, i) => entity(`light.l${i}`)), additional: [] };
   assert.equal(entityCandidates('favoriteAccessories', '', defaultSettings('default'), many, {}).length, 10);
 });
+
+test('solid surfaces round-trips through the ui section and keeps other ui keys', () => {
+  assert.equal(settingsFromCustomizations({}, 'default').solidSurfaces, false);
+  assert.equal(settingsFromCustomizations({ ui: { solid_surfaces: true } }, 'default').solidSurfaces, true);
+  assert.equal(settingsFromCustomizations({ ui: { solid_surfaces: 'yes' } }, 'default').solidSurfaces, false);
+
+  const out = settingsToSections({ ...defaultSettings('default'), solidSurfaces: true }, {}, { keep: 2 });
+  assert.equal(out.ui.solid_surfaces, true);
+  assert.equal(out.ui.keep, 2);
+});
+
+test('solid surfaces does not trigger a re-render', () => {
+  const before = defaultSettings('default');
+  const after = { ...cloneSettings(before), solidSurfaces: true };
+  assert.equal(requiresRender(before, after), false);
+});

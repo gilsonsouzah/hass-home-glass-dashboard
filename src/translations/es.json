@@ -140,7 +140,9 @@
     "home": "Inicio",
     "home_settings": "Configuración del Hogar",
     "reorder_sections": "Reordenar Secciones",
-    "choose_wallpaper": "Elegir Fondo de Pantalla"
+    "choose_wallpaper": "Elegir Fondo de Pantalla",
+    "menu": "Menú",
+    "remove": "Quitar"
   },
   "wallpaper_presets": {
     "default": "Predeterminado",
@@ -284,6 +286,8 @@
     "show_cost_description": "Muestra las cifras de costo en el panel de energía cuando estén disponibles",
     "show_gas": "Mostrar Gas",
     "show_gas_description": "Muestra el consumo de gas en la pantalla principal y el panel de energía cuando esté configurado",
+    "solid_surfaces": "Superficies sólidas (reducir transparencia)",
+    "solid_surfaces_description": "Sustituye el cristal por superficies opacas. Útil si el texto se lee mal sobre el fondo o el dispositivo va lento.",
     "no_entities_found": "No se encontraron entidades"
   },
   "status_messages": {

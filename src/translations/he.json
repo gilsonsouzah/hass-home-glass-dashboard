@@ -140,7 +140,9 @@
     "home": "בית",
     "home_settings": "הגדרות הבית",
     "reorder_sections": "סידור מקטעים",
-    "choose_wallpaper": "בחר רקע"
+    "choose_wallpaper": "בחר רקע",
+    "menu": "תפריט",
+    "remove": "הסר"
   },
   "wallpaper_presets": {
     "default": "ברירת מחדל",
@@ -284,6 +286,8 @@
     "show_cost_description": "הצג נתוני עלות בלוח האנרגיה כאשר זמינים",
     "show_gas": "הצג גז",
     "show_gas_description": "הצג צריכת גז במסך הבית ובלוח האנרגיה כאשר מוגדר",
+    "solid_surfaces": "משטחים אטומים (הפחתת שקיפות)",
+    "solid_surfaces_description": "מחליף את אפקט הזכוכית במשטחים אטומים. שימושי אם הטקסט קשה לקריאה מעל הרקע או אם המכשיר איטי.",
     "no_entities_found": "לא נמצאו ישויות"
   },
   "status_messages": {

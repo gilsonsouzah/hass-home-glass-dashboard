@@ -140,7 +140,9 @@
     "home": "Thuis",
     "home_settings": "Huis Instellingen",
     "reorder_sections": "Secties Herordenen",
-    "choose_wallpaper": "Achtergrond Kiezen"
+    "choose_wallpaper": "Achtergrond Kiezen",
+    "menu": "Menu",
+    "remove": "Verwijderen"
   },
   "wallpaper_presets": {
     "default": "Standaard",
@@ -284,6 +286,8 @@
     "show_cost_description": "Toont kostencijfers op het energiedashboard indien beschikbaar",
     "show_gas": "Gas Tonen",
     "show_gas_description": "Toont gasverbruik op het startscherm en energiedashboard indien geconfigureerd",
+    "solid_surfaces": "Vaste oppervlakken (transparantie verminderen)",
+    "solid_surfaces_description": "Vervangt glas door ondoorzichtige vlakken. Handig als tekst op je achtergrond slecht leesbaar is of je apparaat traag is.",
     "no_entities_found": "Geen entiteiten gevonden"
   },
   "status_messages": {

@@ -7,7 +7,7 @@ import type { Catalog } from './entityCandidates';
 const chip = (entityId: string, label: string) => `
         <div class="selected-entity-chip" data-entity-id="${escapeHtml(entityId)}">
           <span class="entity-name">${escapeHtml(label)}</span>
-          <ha-icon icon="mdi:close" class="remove-entity"></ha-icon>
+          <ha-icon icon="mdi:close" class="remove-entity" role="button" tabindex="0" aria-label="${escapeHtml(localize('ui_actions.remove'))}: ${escapeHtml(label)}"></ha-icon>
         </div>
       `;
 
@@ -49,17 +49,28 @@ export interface ChipRenderers {
   weather(id?: string): string;
 }
 
+function switchCard(id: string, label: string, cardAttrs = ''): string {
+  return `<div class="settings-card switch-card"${cardAttrs}>
+          <div class="switch-setting-row">
+            <span class="option-text" id="${id}-label">${label}</span>
+            <div class="ui-setting-toggle" id="${id}" role="switch" tabindex="0" aria-checked="false" aria-labelledby="${id}-label">
+              <div class="toggle-switch"></div>
+            </div>
+          </div>
+        </div>`;
+}
+
 export function modalHtml(temp: HomeSettingsData, chips: ChipRenderers): string {
   return `
-      <div class="modal-backdrop"></div>
-      <div class="modal-content">
+      <div class="modal-backdrop" aria-hidden="true"></div>
+      <div class="modal-content hg-glass--thick" role="dialog" aria-modal="true" aria-labelledby="hg-settings-title">
         <div class="modal-header">
-          <button class="modal-cancel ${LiquidGlassClasses.modalCancel}">
-            <ha-icon icon="mdi:close"></ha-icon>
+          <button class="modal-cancel ${LiquidGlassClasses.modalCancel}" aria-label="${localize('ui_actions.cancel')}">
+            <ha-icon icon="mdi:close" aria-hidden="true"></ha-icon>
           </button>
-          <h2>${localize('settings.title')}</h2>
-          <button class="modal-done ${LiquidGlassClasses.modalDone}">
-            <ha-icon icon="mdi:check"></ha-icon>
+          <h2 id="hg-settings-title">${localize('settings.title')}</h2>
+          <button class="modal-done ${LiquidGlassClasses.modalDone}" aria-label="${localize('ui_actions.done')}">
+            <ha-icon icon="mdi:check" aria-hidden="true"></ha-icon>
             <div class="save-spinner"></div>
           </button>
         </div>
@@ -77,7 +88,7 @@ function settingsContentHtml(temp: HomeSettingsData, chips: ChipRenderers): stri
         <div class="settings-card">
           <div class="entity-selector" data-setting="favoriteAccessories">
             <div class="autocomplete-container">
-              <input type="text" class="autocomplete-input" placeholder="${localize('settings.search_accessories')}" />
+              <input type="text" class="autocomplete-input" placeholder="${localize('settings.search_accessories')}" aria-label="${localize('settings.search_accessories')}" autocomplete="off" />
               <div class="autocomplete-results"></div>
             </div>
             <div class="selected-entities">
@@ -93,7 +104,7 @@ function settingsContentHtml(temp: HomeSettingsData, chips: ChipRenderers): stri
         <div class="settings-card">
           <div class="entity-selector" data-setting="excludedFromHome">
             <div class="autocomplete-container">
-              <input type="text" class="autocomplete-input" placeholder="${localize('settings.search_accessories')}" />
+              <input type="text" class="autocomplete-input" placeholder="${localize('settings.search_accessories')}" aria-label="${localize('settings.search_accessories')}" autocomplete="off" />
               <div class="autocomplete-results"></div>
             </div>
             <div class="selected-entities">
@@ -109,7 +120,7 @@ function settingsContentHtml(temp: HomeSettingsData, chips: ChipRenderers): stri
         <div class="settings-card">
           <div class="entity-selector" data-setting="excludedFromDashboard">
             <div class="autocomplete-container">
-              <input type="text" class="autocomplete-input" placeholder="${localize('settings.search_accessories')}" />
+              <input type="text" class="autocomplete-input" placeholder="${localize('settings.search_accessories')}" aria-label="${localize('settings.search_accessories')}" autocomplete="off" />
               <div class="autocomplete-results"></div>
             </div>
             <div class="selected-entities">
@@ -121,50 +132,22 @@ function settingsContentHtml(temp: HomeSettingsData, chips: ChipRenderers): stri
       </div>
 
       <div class="settings-section">
-        <div class="settings-card switch-card">
-          <div class="switch-setting-row">
-            <span class="option-text">${localize('settings.show_switches_cards')}</span>
-            <div class="ui-setting-toggle" id="switches-toggle">
-              <div class="toggle-switch"></div>
-            </div>
-          </div>
-        </div>
+        ${switchCard('switches-toggle', localize('settings.show_switches_cards'))}
         <p class="settings-section-description">${localize('settings.show_switches_cards_description')}</p>
       </div>
 
       <div class="settings-section">
-        <div class="settings-card switch-card">
-          <div class="switch-setting-row">
-            <span class="option-text">${localize('settings.show_energy')}</span>
-            <div class="ui-setting-toggle" id="energy-toggle">
-              <div class="toggle-switch"></div>
-            </div>
-          </div>
-        </div>
+        ${switchCard('energy-toggle', localize('settings.show_energy'))}
         <p class="settings-section-description">${localize('settings.show_energy_description')}</p>
       </div>
 
       <div class="settings-section">
-        <div class="settings-card switch-card">
-          <div class="switch-setting-row">
-            <span class="option-text">${localize('settings.show_cost')}</span>
-            <div class="ui-setting-toggle" id="cost-toggle">
-              <div class="toggle-switch"></div>
-            </div>
-          </div>
-        </div>
+        ${switchCard('cost-toggle', localize('settings.show_cost'))}
         <p class="settings-section-description">${localize('settings.show_cost_description')}</p>
       </div>
 
       <div class="settings-section">
-        <div class="settings-card switch-card">
-          <div class="switch-setting-row">
-            <span class="option-text">${localize('settings.show_gas')}</span>
-            <div class="ui-setting-toggle" id="gas-toggle">
-              <div class="toggle-switch"></div>
-            </div>
-          </div>
-        </div>
+        ${switchCard('gas-toggle', localize('settings.show_gas'))}
         <p class="settings-section-description">${localize('settings.show_gas_description')}</p>
       </div>
 
@@ -173,7 +156,7 @@ function settingsContentHtml(temp: HomeSettingsData, chips: ChipRenderers): stri
         <div class="settings-card">
           <div class="entity-selector" data-setting="includedSwitches">
             <div class="autocomplete-container">
-              <input type="text" class="autocomplete-input" placeholder="${localize('settings.search_switches')}" />
+              <input type="text" class="autocomplete-input" placeholder="${localize('settings.search_switches')}" aria-label="${localize('settings.search_switches')}" autocomplete="off" />
               <div class="autocomplete-results"></div>
             </div>
             <div class="selected-entities">
@@ -189,7 +172,7 @@ function settingsContentHtml(temp: HomeSettingsData, chips: ChipRenderers): stri
         <div class="settings-card">
           <div class="entity-selector" data-setting="extraAccessories">
             <div class="autocomplete-container">
-              <input type="text" class="autocomplete-input" placeholder="${localize('settings.search_entities')}" />
+              <input type="text" class="autocomplete-input" placeholder="${localize('settings.search_entities')}" aria-label="${localize('settings.search_entities')}" autocomplete="off" />
               <div class="autocomplete-results"></div>
             </div>
             <div class="selected-entities">
@@ -205,7 +188,7 @@ function settingsContentHtml(temp: HomeSettingsData, chips: ChipRenderers): stri
         <div class="settings-card">
           <div class="entity-selector" data-setting="weatherEntity">
             <div class="autocomplete-container">
-              <input type="text" class="autocomplete-input" placeholder="${localize('settings.search_weather_entity')}" />
+              <input type="text" class="autocomplete-input" placeholder="${localize('settings.search_weather_entity')}" aria-label="${localize('settings.search_weather_entity')}" autocomplete="off" />
               <div class="autocomplete-results"></div>
             </div>
             <div class="selected-entities">
@@ -220,17 +203,17 @@ function settingsContentHtml(temp: HomeSettingsData, chips: ChipRenderers): stri
         <h3 class="settings-section-header">${localize('settings.home_wallpaper')}</h3>
         <div class="settings-card">
           <div class="wallpaper-options">
-            <div class="wallpaper-option-row" data-action="upload">
+            <div class="wallpaper-option-row" data-action="upload" role="button" tabindex="0">
               <span class="option-text upload-text">${localize('settings.take_photo')}</span>
             </div>
-            <div class="wallpaper-option-row" data-action="presets">
+            <div class="wallpaper-option-row" data-action="presets" role="button" tabindex="0">
               <span class="option-text">${localize('settings.choose_from_existing')}</span>
-              <ha-icon icon="mdi:chevron-right" class="option-arrow"></ha-icon>
+              <ha-icon icon="mdi:chevron-right" class="option-arrow" aria-hidden="true"></ha-icon>
             </div>
           </div>
 
           <div class="current-wallpaper-preview">
-            <div class="wallpaper-preview-image" id="current-wallpaper-preview"></div>
+            <div class="wallpaper-preview-image" id="current-wallpaper-preview" role="img" aria-label="${localize('settings.home_wallpaper')}"></div>
           </div>
 
           <input type="file" id="background-file-input" accept="image/*" style="display: none;">
@@ -238,25 +221,16 @@ function settingsContentHtml(temp: HomeSettingsData, chips: ChipRenderers): stri
       </div>
 
       <div class="settings-section">
-        <div class="settings-card switch-card">
-          <div class="switch-setting-row">
-            <span class="option-text">${localize('settings.hide_ha_header')}</span>
-            <div class="ui-setting-toggle" id="header-toggle">
-              <div class="toggle-switch"></div>
-            </div>
-          </div>
-        </div>
+        ${switchCard('header-toggle', localize('settings.hide_ha_header'))}
       </div>
 
       <div class="settings-section">
-        <div class="settings-card switch-card" data-setting="sidebar">
-          <div class="switch-setting-row">
-            <span class="option-text">${localize('settings.hide_ha_sidebar')}</span>
-            <div class="ui-setting-toggle" id="sidebar-toggle">
-              <div class="toggle-switch"></div>
-            </div>
-          </div>
-        </div>
+        ${switchCard('sidebar-toggle', localize('settings.hide_ha_sidebar'), ' data-setting="sidebar"')}
+      </div>
+
+      <div class="settings-section">
+        ${switchCard('solid-toggle', localize('settings.solid_surfaces'))}
+        <p class="settings-section-description">${localize('settings.solid_surfaces_description')}</p>
       </div>
     `;
 }

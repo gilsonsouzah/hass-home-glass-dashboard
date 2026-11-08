@@ -4,12 +4,16 @@ import { LiquidGlassClasses } from '../../utils/LiquidGlassStyles';
 import { escapeHtml } from '../../utils/html';
 import { Area, HeaderConfig, areaId, currentRoomId, editViewKey, orderAreas } from './headerModel';
 
+export const MENU_ID = 'hg-header-menu';
+
+export const menuButtonLabel = (editMode: boolean): string => localize(editMode ? 'ui_actions.done' : 'ui_actions.menu');
+
 export function menuButtonContent(editMode: boolean): string {
   if (editMode) {
     return `<ha-icon icon="mdi:check"></ha-icon>`;
   }
   return `
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="6" cy="12" r="2" fill="currentColor"/>
         <circle cx="12" cy="12" r="2" fill="currentColor"/>
         <circle cx="18" cy="12" r="2" fill="currentColor"/>
@@ -23,8 +27,8 @@ export function roomItemsHtml(areas: Area[], activeRoomId: string | null): strin
       const id = areaId(area);
       const isActive = activeRoomId === id;
       return `
-            <div class="dropdown-item room-item${isActive ? ' active' : ''}" data-room-id="${escapeHtml(id)}">
-              <span class="room-checkmark"></span>
+            <div class="dropdown-item room-item${isActive ? ' active' : ''}" role="menuitem" tabindex="-1"${isActive ? ' aria-current="page"' : ''} data-room-id="${escapeHtml(id)}">
+              <span class="room-checkmark" aria-hidden="true"></span>
               <span>${escapeHtml(area.name || id)}</span>
             </div>
           `;
@@ -43,7 +47,7 @@ export function roomsSection({ areas, saved }: RoomsInputs): string {
   if (ordered.length === 0) return '';
 
   return `
-        <div class="dropdown-separator-thick"></div>
+        <div class="dropdown-separator-thick" role="separator"></div>
         ${roomItemsHtml(ordered, currentRoomId(window.location.pathname))}
       `;
 }
@@ -62,31 +66,31 @@ export function dropdownContent({ config, headerToggleText, sidebarToggleText, r
     window.innerWidth <= 768
       ? ''
       : `
-      <div class="dropdown-item settings-item sidebar-toggle">
-        <span class="item-checkmark"></span>
-        <ha-icon icon="${RTLHelper.isRTL() ? 'mdi:dock-right' : 'mdi:dock-left'}"></ha-icon>
+      <div class="dropdown-item settings-item sidebar-toggle" role="menuitem" tabindex="-1">
+        <span class="item-checkmark" aria-hidden="true"></span>
+        <ha-icon icon="${RTLHelper.isRTL() ? 'mdi:dock-right' : 'mdi:dock-left'}" aria-hidden="true"></ha-icon>
         <span>${sidebarToggleText}</span>
       </div>`;
 
   return `
-      <div class="dropdown-item settings-item home-settings-item">
-        <span class="item-checkmark"></span>
-        <ha-icon icon="mdi:cog-outline"></ha-icon>
+      <div class="dropdown-item settings-item home-settings-item" role="menuitem" tabindex="-1">
+        <span class="item-checkmark" aria-hidden="true"></span>
+        <ha-icon icon="mdi:cog-outline" aria-hidden="true"></ha-icon>
         <span>${localize('ui_actions.home_settings')}</span>
       </div>
-      <div class="dropdown-item settings-item edit-item">
-        <span class="item-checkmark"></span>
-        <ha-icon icon="mdi:view-grid-outline"></ha-icon>
+      <div class="dropdown-item settings-item edit-item" role="menuitem" tabindex="-1">
+        <span class="item-checkmark" aria-hidden="true"></span>
+        <ha-icon icon="mdi:view-grid-outline" aria-hidden="true"></ha-icon>
         <span>${editText}</span>
       </div>
-      <div class="dropdown-item settings-item reorder-item">
-        <span class="item-checkmark"></span>
-        <ha-icon icon="mdi:view-sequential-outline"></ha-icon>
+      <div class="dropdown-item settings-item reorder-item" role="menuitem" tabindex="-1">
+        <span class="item-checkmark" aria-hidden="true"></span>
+        <ha-icon icon="mdi:view-sequential-outline" aria-hidden="true"></ha-icon>
         <span>${localize('ui_actions.reorder_sections')}</span>
       </div>
-      <div class="dropdown-item settings-item header-toggle">
-        <span class="item-checkmark"></span>
-        <ha-icon icon="mdi:page-layout-header"></ha-icon>
+      <div class="dropdown-item settings-item header-toggle" role="menuitem" tabindex="-1">
+        <span class="item-checkmark" aria-hidden="true"></span>
+        <ha-icon icon="mdi:page-layout-header" aria-hidden="true"></ha-icon>
         <span>${headerToggleText}</span>
       </div>${sidebarSection}${roomsHtml}
     `;
@@ -96,30 +100,31 @@ export interface HeaderContentInputs {
   config: HeaderConfig;
   showSidebarButton: boolean;
   menuButtonHtml: string;
+  menuButtonLabel: string;
   dropdownHtml: string;
 }
 
-export function headerContent({ config, showSidebarButton, menuButtonHtml, dropdownHtml }: HeaderContentInputs): string {
+export function headerContent({ config, showSidebarButton, menuButtonHtml, menuButtonLabel, dropdownHtml }: HeaderContentInputs): string {
   const leadingButton = config.showBackButton
     ? `
-            <button class="apple-header-back-button ${LiquidGlassClasses.headerButton}">
-              <ha-icon icon="${RTLHelper.getBackIcon()}"></ha-icon>
+            <button class="apple-header-back-button ${LiquidGlassClasses.headerButton}" aria-label="${localize('ui_actions.back')}">
+              <ha-icon icon="${RTLHelper.getBackIcon()}" aria-hidden="true"></ha-icon>
             </button>
           `
     : showSidebarButton
       ? `
-            <button class="apple-header-sidebar-button ${LiquidGlassClasses.headerButton}">
-              <ha-icon icon="mdi:menu"></ha-icon>
+            <button class="apple-header-sidebar-button ${LiquidGlassClasses.headerButton}" aria-label="${localize('toggles.show_ha_sidebar')}">
+              <ha-icon icon="mdi:menu" aria-hidden="true"></ha-icon>
             </button>
           `
       : '';
 
   const menu = config.showMenu
     ? `
-            <button class="apple-header-menu-button ${LiquidGlassClasses.headerButton}">
+            <button class="apple-header-menu-button ${LiquidGlassClasses.headerButton}" aria-label="${menuButtonLabel}" aria-haspopup="menu" aria-expanded="false" aria-controls="${MENU_ID}">
               ${menuButtonHtml}
             </button>
-            <div class="apple-header-dropdown">
+            <div class="apple-header-dropdown hg-glass--thick" id="${MENU_ID}" role="menu" aria-label="${localize('ui_actions.menu')}">
               ${dropdownHtml}
             </div>
           `

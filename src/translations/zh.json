@@ -140,7 +140,9 @@
     "home": "家",
     "home_settings": "家庭设置",
     "reorder_sections": "重新排序部分",
-    "choose_wallpaper": "选择壁纸"
+    "choose_wallpaper": "选择壁纸",
+    "menu": "菜单",
+    "remove": "移除"
   },
   "wallpaper_presets": {
     "default": "默认",
@@ -284,6 +286,8 @@
     "show_cost_description": "在能源仪表板上显示费用数据（如可用）",
     "show_gas": "显示燃气",
     "show_gas_description": "在主屏幕和能源仪表板上显示燃气消耗（如已配置）",
+    "solid_surfaces": "纯色表面（降低透明度）",
+    "solid_surfaces_description": "用不透明表面替代玻璃效果。当壁纸上的文字难以阅读或设备运行缓慢时很有用。",
     "no_entities_found": "未找到实体"
   },
   "status_messages": {

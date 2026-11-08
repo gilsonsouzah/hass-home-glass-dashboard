@@ -3,10 +3,8 @@ import { liquidGlassCSS } from '../../utils/LiquidGlassStyles';
 export const HEADER_STYLE_ID = 'hg-header-styles';
 
 export const HEADER_CSS = `
-  /* Include liquid glass styles for shadow DOM context */
   ${liquidGlassCSS}
 
-  /* Sticky header for home page, fixed for group pages */
   .hg-header {
     position: sticky;
     top: var(--ha-header-height, 0px);
@@ -14,29 +12,25 @@ export const HEADER_CSS = `
     right: 0;
     z-index: 3;
     background: transparent;
-    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-    width: calc(100% + 2 * var(--apple-page-padding, 22px));
-    margin-left: calc(-1 * var(--apple-page-padding, 22px));
-    min-height: 44px;
+    font-family: var(--hg-font);
+    width: calc(100% + 2 * var(--hg-page-padding));
+    margin-left: calc(-1 * var(--hg-page-padding));
+    min-height: var(--hg-hit-min);
   }
 
   .hg-header.rtl {
     margin-left: 0;
-    margin-right: calc(-1 * var(--apple-page-padding, 22px));
+    margin-right: calc(-1 * var(--hg-page-padding));
   }
 
-  /* Fixed positioning for group pages to prevent jumping */
   .hg-header.group-page {
     position: fixed;
     top: 0;
     left: 0;
     margin-left: 0;
     width: 100%;
-    /* Dynamic positioning will be applied via JavaScript */
   }
 
-  /* RTL fixed positioning for group pages */
   .hg-header.group-page.rtl {
     left: auto;
     right: 0;
@@ -44,172 +38,141 @@ export const HEADER_CSS = `
     margin-right: 0;
   }
 
-  .hg-header.scrolled {
-    background: transparent;
+  .hg-header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--hg-glass-regular);
+    -webkit-backdrop-filter: var(--hg-backdrop-regular);
+    backdrop-filter: var(--hg-backdrop-regular);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.7) 40%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, 0.7) 40%, transparent 100%);
+    opacity: 0;
+    transition: opacity var(--hg-dur) var(--hg-ease-standard);
+    z-index: -1;
+    pointer-events: none;
   }
 
   .hg-header.scrolled::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    -webkit-mask-image: linear-gradient(
-      to bottom,
-      rgba(0, 0, 0, 1) 0%,
-      rgba(0, 0, 0, 0.7) 40%,
-      rgba(0, 0, 0, 0) 100%
-    );
-    mask-image: linear-gradient(
-      to bottom,
-      rgba(0, 0, 0, 1) 0%,
-      rgba(0, 0, 0, 0.7) 40%,
-      rgba(0, 0, 0, 0) 100%
-    );
-    z-index: -1;
-    pointer-events: none;
+    opacity: 1;
   }
 
   .apple-header-content {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 12px var(--apple-page-padding, 22px);
+    padding: 12px var(--hg-page-padding);
     position: relative;
   }
 
-  /* Back button - positioning only (glass effect from .liquid-glass-transparent) */
-  .apple-header-back-button {
+  .apple-header-back-button,
+  .apple-header-sidebar-button,
+  .apple-header-menu-button {
     position: absolute;
-    left: 16px;
     top: 50%;
     transform: translateY(-50%);
     z-index: 10;
+    width: var(--hg-hit-min) !important;
+    height: var(--hg-hit-min) !important;
+    min-width: var(--hg-hit-min) !important;
+    font-family: inherit;
   }
 
-  .apple-header-back-button:active {
-    transform: translateY(-50%) scale(0.95);
+  .apple-header-back-button,
+  .apple-header-sidebar-button {
+    left: 16px;
   }
 
-  /* Fixed top position for group pages */
-  .hg-header.group-page .apple-header-back-button {
-    top: 12px;
-    transform: none;
-  }
-
-  .hg-header.group-page .apple-header-back-button:active {
-    transform: scale(0.95);
-  }
-
-  /* RTL positioning for group-page back button */
-  .hg-header.group-page.rtl .apple-header-back-button {
-    left: auto;
+  .apple-header-menu-button {
     right: 16px;
+  }
+
+  .apple-header-back-button:active,
+  .apple-header-sidebar-button:active,
+  .apple-header-menu-button:active {
+    transform: translateY(-50%) scale(var(--hg-press-scale));
+  }
+
+  .hg-header.scrolled .liquid-glass-transparent:not(.edit-mode) {
+    background: var(--hg-glass-regular) !important;
+  }
+
+  .hg-header.group-page .apple-header-back-button,
+  .hg-header.group-page .apple-header-sidebar-button,
+  .hg-header.group-page .apple-header-menu-button {
     top: 12px;
     transform: none;
+  }
+
+  .hg-header.group-page .apple-header-back-button:active,
+  .hg-header.group-page .apple-header-sidebar-button:active,
+  .hg-header.group-page .apple-header-menu-button:active {
+    transform: scale(var(--hg-press-scale));
   }
 
   .apple-header-back-button ha-icon {
     --mdc-icon-size: 26px;
     flex-shrink: 0;
-    position: relative;
-    z-index: 2;
-  }
-
-  .hg-header.rtl .apple-header-back-button {
-    left: auto;
-    right: 16px;
-  }
-
-  /* Mobile adjustments for back button */
-  @media (max-width: 768px) {
-    .apple-header-back-button {
-      left: 12px;
-      width: 34px;
-      height: 34px;
-      min-width: 34px;
-    }
-
-    .hg-header.rtl .apple-header-back-button {
-      left: auto;
-      right: 12px;
-    }
-  }
-
-  /* Sidebar button - positioning only (glass effect from .liquid-glass-transparent) */
-  .apple-header-sidebar-button {
-    position: absolute;
-    left: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 10;
-  }
-
-  .apple-header-sidebar-button:active {
-    transform: translateY(-50%) scale(0.95);
   }
 
   .apple-header-sidebar-button ha-icon {
-    --mdc-icon-size: 22px;
-    position: relative;
-    z-index: 2;
+    --mdc-icon-size: var(--hg-action-icon-size);
   }
 
+  .hg-header.rtl .apple-header-back-button,
   .hg-header.rtl .apple-header-sidebar-button {
     left: auto !important;
     right: 16px !important;
   }
 
-  /* Fixed top position for group pages */
-  .hg-header.group-page .apple-header-sidebar-button {
-    top: 13px;
-    transform: none;
+  .hg-header.rtl .apple-header-menu-button {
+    right: auto !important;
+    left: 16px !important;
   }
 
-  .hg-header.group-page .apple-header-sidebar-button:active {
-    transform: scale(0.95);
-  }
-
-  /* RTL positioning for group-page sidebar button on desktop */
-  .hg-header.group-page.rtl .apple-header-sidebar-button {
-    left: auto !important;
-    right: 16px !important;
-  }
-
-  /* Mobile adjustments for sidebar button */
   @media (max-width: 768px) {
+    .apple-header-back-button,
     .apple-header-sidebar-button {
       left: 12px;
-      width: 34px;
-      height: 34px;
-      min-width: 34px;
+    }
+
+    .apple-header-menu-button {
+      right: 12px;
+    }
+
+    .hg-header.rtl .apple-header-back-button,
+    .hg-header.rtl .apple-header-sidebar-button {
+      right: 12px !important;
+    }
+
+    .hg-header.rtl .apple-header-menu-button {
+      left: 12px !important;
     }
 
     .hg-header.group-page .apple-header-sidebar-button {
       top: 13px;
     }
 
-    /* RTL positioning for group-page sidebar button on mobile */
     .hg-header.group-page.rtl .apple-header-sidebar-button {
-      left: auto !important;
-      right: 12px !important;
       top: 10px;
-    }
-
-    .hg-header.rtl .apple-header-sidebar-button {
-      left: auto !important;
-      right: 12px !important;
     }
   }
 
-  /* Scrolled content (center) */
+  .apple-header-menu-button.edit-mode {
+    background: var(--hg-color-orange) !important;
+    color: var(--hg-label-on-active) !important;
+  }
+
+  .apple-header-menu-button.edit-mode ha-icon {
+    --mdc-icon-size: var(--hg-action-icon-size);
+  }
+
   .apple-header-scrolled {
     opacity: 0;
     visibility: hidden;
-    transition: all 0.2s ease;
+    transition:
+      opacity var(--hg-dur) var(--hg-ease-standard),
+      visibility var(--hg-dur) var(--hg-ease-standard);
     pointer-events: none;
     flex: 1;
     display: flex;
@@ -225,24 +188,23 @@ export const HEADER_CSS = `
     width: 100%;
   }
 
-    .apple-header-scrolled-title-container {
-      min-height: 44px;
-      display: flex;
-      align-items: center;
-    }
+  .apple-header-scrolled-title-container {
+    min-height: var(--hg-hit-min);
+    display: flex;
+    align-items: center;
+  }
 
   .apple-header-scrolled-title {
-    font-size: 17px;
-    font-weight: 600;
-    color: #ffffff;
+    font-size: var(--hg-text-headline-size);
+    line-height: var(--hg-text-headline-line);
+    font-weight: var(--hg-text-headline-weight);
+    color: var(--hg-label);
     margin: 0;
-    letter-spacing: -0.4px;
     white-space: nowrap;
   }
 
   .apple-header-scrolled-chips {
-    display: none; /* Hidden by default - only show when scrolled */
-    transition: all 0.2s ease;
+    display: none;
     width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
@@ -256,96 +218,10 @@ export const HEADER_CSS = `
     display: none;
   }
 
-  /* Show chips in header only when scrolled */
   .hg-header.scrolled .apple-header-scrolled-chips {
     display: block;
   }
 
-  /* Menu button - positioning only (glass effect from .liquid-glass-transparent) */
-  .apple-header-menu-button {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    right: 16px;
-    z-index: 10;
-    font-family: inherit;
-  }
-
-  .apple-header-menu-button:active {
-    transform: translateY(-50%) scale(0.95);
-  }
-
-  /* Fixed top position for group pages */
-  .hg-header.group-page .apple-header-menu-button {
-    top: 12px;
-    transform: none;
-  }
-
-  .hg-header.group-page .apple-header-menu-button:active {
-    transform: scale(0.97);
-  }
-
-  /* RTL positioning for group-page menu button */
-  .hg-header.group-page.rtl .apple-header-menu-button {
-    right: auto !important;
-    left: 16px !important;
-    top: 12px;
-    transform: none;
-  }
-
-  .hg-header.rtl .apple-header-menu-button {
-    right: auto !important;
-    left: 16px !important;
-  }
-
-  /* Mobile adjustments for menu button */
-  @media (max-width: 768px) {
-    .apple-header-menu-button {
-      right: 12px;
-      width: 34px;
-      height: 34px;
-      min-width: 34px;
-    }
-
-    .hg-header.rtl .apple-header-menu-button {
-      right: auto !important;
-      left: 12px !important;
-    }
-  }
-
-  .apple-header-menu-button.edit-mode {
-    background: rgba(255, 149, 0, 0.85) !important;
-    box-shadow:
-      inset 0 0 0 1px rgba(255, 255, 255, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.4),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.1),
-      0 2px 8px rgba(255, 149, 0, 0.3) !important;
-  }
-
-  .apple-header-menu-button.edit-mode::before {
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.5) 0%,
-      rgba(255, 200, 100, 0.2) 25%,
-      rgba(255, 255, 255, 0.35) 50%,
-      rgba(255, 200, 100, 0.15) 75%,
-      rgba(255, 255, 255, 0.45) 100%
-    ) !important;
-  }
-
-  .apple-header-menu-button.edit-mode:hover {
-    background: rgba(255, 159, 10, 0.9) !important;
-  }
-
-  .apple-header-menu-button.edit-mode:active {
-    background: rgba(255, 139, 0, 0.95) !important;
-  }
-
-  .apple-header-menu-button.edit-mode ha-icon {
-    --mdc-icon-size: 22px;
-  }
-
-  /* Dropdown */
   .apple-header-dropdown {
     position: absolute;
     top: calc(100% - 50px);
@@ -356,20 +232,18 @@ export const HEADER_CSS = `
     overflow-x: hidden;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    background: rgba(30, 30, 30, 0.75);
-    backdrop-filter: blur(50px) saturate(180%);
-    -webkit-backdrop-filter: blur(50px) saturate(180%);
-    border-radius: var(--apple-modal-radius, 20px);
-    padding: 4px 0;
+    border-radius: var(--hg-radius-sheet);
+    padding: 6px 0;
     opacity: 0;
     visibility: hidden;
     transform: translateY(-6px) scale(0.96);
-    transition: all 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transform-origin: top right;
+    transition:
+      opacity var(--hg-dur-fast) var(--hg-ease-standard),
+      transform var(--hg-dur) var(--hg-ease-spring),
+      visibility var(--hg-dur) var(--hg-ease-standard);
     z-index: 2000;
     pointer-events: none;
-    box-shadow:
-      0 0 0 0.5px rgba(255, 255, 255, 0.1),
-      0 10px 40px rgba(0, 0, 0, 0.4);
   }
 
   .apple-header-dropdown::-webkit-scrollbar {
@@ -379,6 +253,7 @@ export const HEADER_CSS = `
   .hg-header.rtl .apple-header-dropdown {
     right: auto;
     left: 10px;
+    transform-origin: top left;
   }
 
   .apple-header-dropdown.open {
@@ -392,6 +267,11 @@ export const HEADER_CSS = `
     top: auto;
     bottom: calc(100% - 18px);
     transform: translateY(6px) scale(0.96);
+    transform-origin: bottom right;
+  }
+
+  .hg-header.rtl .apple-header-dropdown.dropdown-above {
+    transform-origin: bottom left;
   }
 
   .apple-header-dropdown.dropdown-above.open {
@@ -399,15 +279,15 @@ export const HEADER_CSS = `
   }
 
   .dropdown-separator {
-    height: 0.5px;
-    background: rgba(255, 255, 255, 0.1);
+    height: 1px;
+    background: var(--hg-separator);
     margin: 4px 16px;
   }
 
   .dropdown-separator-thick {
-    height: 0.5px;
-    background: rgba(255, 255, 255, 0.15);
-    margin: 6px 16px;
+    height: 8px;
+    background: var(--hg-fill);
+    margin: 6px 0;
   }
 
   .dropdown-item {
@@ -415,24 +295,32 @@ export const HEADER_CSS = `
     align-items: center;
     justify-content: flex-start;
     gap: 12px;
-    padding: 0 12px;
-    color: rgba(255, 255, 255, 0.9);
+    padding: 0 16px 0 12px;
+    color: var(--hg-label);
     cursor: pointer;
-    transition: background 0.15s ease;
-    font-size: 15px;
-    font-weight: 400;
-    letter-spacing: -0.2px;
-    line-height: 1.3;
-    min-height: 40px;
+    transition: background-color var(--hg-dur-fast) var(--hg-ease-standard);
+    font-size: var(--hg-text-callout-size);
+    line-height: var(--hg-text-callout-line);
+    font-weight: var(--hg-text-callout-weight);
+    min-height: var(--hg-hit-min);
     direction: inherit;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  .dropdown-item:hover {
-    background: rgba(255, 255, 255, 0.08);
+  @media (hover: hover) {
+    .dropdown-item:hover {
+      background: var(--hg-fill);
+    }
   }
 
   .dropdown-item:active {
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--hg-fill);
+  }
+
+  .dropdown-item:focus-visible {
+    outline: var(--hg-focus-ring);
+    outline-offset: calc(-1 * var(--hg-focus-offset));
+    background: var(--hg-fill);
   }
 
   .dropdown-item span {
@@ -442,36 +330,27 @@ export const HEADER_CSS = `
   }
 
   .dropdown-item ha-icon {
-    opacity: 0.6;
     flex-shrink: 0;
     width: 20px;
     height: 20px;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--hg-label-secondary);
     --mdc-icon-size: 20px;
   }
 
-  /* Checkmark placeholder for all items */
   .dropdown-item .item-checkmark,
   .dropdown-item .room-checkmark {
+    flex: 0 0 20px;
     width: 20px;
     height: 20px;
-    flex-shrink: 0;
-    flex: 0 0 20px;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
-  /* Room items with checkmark space */
-  .dropdown-item.room-item {
-    padding: 0 12px;
-  }
-
   .dropdown-item.room-item.active .room-checkmark::before {
     content: '✓';
-    font-size: 15px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+    color: var(--hg-label);
   }
 
   .hg-header.rtl .dropdown-item ha-icon {
@@ -487,20 +366,10 @@ export const HEADER_CSS = `
     padding-right: 16px;
   }
 
-  .dropdown-item.edit-item.active {
-    background: rgba(255, 255, 255, 0.08);
-  }
-
   .dropdown-item.edit-item.active ha-icon {
-    opacity: 1;
+    color: var(--hg-label);
   }
 
-  /* Room items without icons should not have justify-content: space-between */
-  .dropdown-item.room-item {
-    justify-content: flex-start;
-  }
-
-  /* Ensure numeric content stays LTR in RTL layouts */
   .apple-header-content [data-numeric],
   .apple-header-content .numeric,
   .apple-header-content input[type="number"],
@@ -510,16 +379,13 @@ export const HEADER_CSS = `
     unicode-bidi: embed;
   }
 
-  /* Ensure proper text alignment for RTL text in LTR numeric contexts */
   .hg-header.rtl .apple-header-content [data-numeric],
   .hg-header.rtl .apple-header-content .numeric,
   .hg-header.rtl .apple-header-content input[type="number"],
   .hg-header.rtl .dropdown-item .number {
-    text-align: left; /* Numbers should be left-aligned even in RTL */
+    text-align: left;
   }
 
-
-  /* Shadow DOM support - ensure RTL styles work within shadow roots */
   :host([dir="rtl"]) .apple-header-back-button,
   :host-context([dir="rtl"]) .apple-header-back-button {
     left: auto;
@@ -539,14 +405,11 @@ export const HEADER_CSS = `
     left: 10px;
   }
 
-  /* Add top padding to page content when header is fixed (group pages) */
   .page-content.has-fixed-header {
-    padding-top: 68px; /* Header height + some margin */
+    padding-top: 68px;
   }
 
-  /* Responsive - tablet */
   @media (max-width: 768px) {
-
     .hg-header {
       width: calc(100% + 32px);
       margin-left: -16px;
@@ -562,16 +425,14 @@ export const HEADER_CSS = `
     }
 
     .apple-header-scrolled-title {
-      font-size: 16px;
+      font-size: var(--hg-text-callout-size);
     }
 
-    /* Adjust padding for mobile fixed header */
     .page-content.has-fixed-header {
-      padding-top: 60px; /* Slightly less on mobile */
+      padding-top: 60px;
     }
   }
 
-  /* Small mobile adjustments */
   @media (max-width: 479px) {
     .hg-header {
       width: calc(100% + 24px);
@@ -583,7 +444,7 @@ export const HEADER_CSS = `
     }
 
     .apple-header-scrolled-title {
-      font-size: 15px;
+      font-size: var(--hg-text-subhead-size);
     }
 
     .apple-header-dropdown {
@@ -597,7 +458,6 @@ export const HEADER_CSS = `
     }
   }
 
-  /* Extra small / accessibility */
   @media (max-width: 359px) {
     .hg-header {
       width: calc(100% + 20px);
@@ -606,10 +466,6 @@ export const HEADER_CSS = `
 
     .apple-header-content {
       padding: 6px 10px;
-    }
-
-    .apple-header-scrolled-title {
-      font-size: 14px;
     }
 
     .apple-header-dropdown {
@@ -622,53 +478,33 @@ export const HEADER_CSS = `
       left: 6px;
     }
 
-    .dropdown-item {
-      padding: 10px 14px;
-      font-size: 14px;
-    }
-
     .page-content.has-fixed-header {
       padding-top: 50px;
     }
   }
 
-  /* Reduce motion for accessibility */
-  @media (prefers-reduced-motion: reduce) {
-    .hg-header,
-    .apple-header-scrolled,
-    .apple-header-dropdown,
-    ha-drawer,
-    home-assistant-main {
-      transition: none !important;
-    }
-  }
-
-  /* Smooth sidebar animations */
   ha-drawer {
-    transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) !important;
+    transition: transform var(--hg-dur-slow) var(--hg-ease-standard) !important;
   }
 
-  /* RTL positioning for Home Assistant drawer */
   [dir="rtl"] ha-drawer {
     left: auto !important;
     right: 0 !important;
   }
 
   home-assistant-main {
-    transition: margin-left 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) !important;
+    transition: margin-left var(--hg-dur-slow) var(--hg-ease-standard) !important;
   }
 
-  /* RTL margin adjustment for main content */
   [dir="rtl"] home-assistant-main {
     margin-left: 0 !important;
     margin-right: 256px !important;
   }
 
-  /* Ensure sidebar content is visible when opened */
   ha-drawer ha-sidebar,
   ha-drawer [role="navigation"],
   ha-drawer .mdc-drawer__content {
-    transition: opacity 0.2s ease !important;
+    transition: opacity var(--hg-dur) var(--hg-ease-standard) !important;
   }
 
   @media (max-width: 768px) {
