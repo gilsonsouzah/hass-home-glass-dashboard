@@ -7,6 +7,9 @@ import { asNumber, pickHvacOnMode, stepTemperature } from '../utils/thermostat';
 import { runCardAction, runIconAction } from './card/actions';
 import { CameraController, isCameraUnavailable } from './card/camera';
 import { toggleLock } from './card/lockModal';
+import { MediaTileModel, mediaTileModel } from './card/mediaTile';
+import { QuickControlsSheet, openQuickControls } from './card/quickControlsSheet';
+import { TileGesture, attachQuickControlsGesture } from './card/tileGestures';
 import { getCardStyles } from './card/styles';
 
 const TEMPERATURE_DEBOUNCE_MS = 600;
@@ -26,6 +29,9 @@ export class HomeCard extends HTMLElement {
   private boundCardClick?: (e: Event) => void;
   private boundIconClick?: (e: Event) => void;
   private boundCardKeydown?: (e: KeyboardEvent) => void;
+  private gesture?: TileGesture;
+  private sheet?: QuickControlsSheet;
+  private mediaKey = '';
   private _hasRendered: boolean = false;
   private readonly camera = new CameraController(
     this,
@@ -51,6 +57,9 @@ export class HomeCard extends HTMLElement {
 
   public cleanup() {
     this.camera.stop();
+    this.gesture?.detach();
+    this.gesture = undefined;
+    this.sheet?.close(false);
 
     if (this.shadowRoot) {
       const card = this.shadowRoot.querySelector('.home-glass-card');
@@ -113,6 +122,8 @@ export class HomeCard extends HTMLElement {
     } else if (this.entity && (!oldHass.states[this.entity] || !hass.states[this.entity])) {
       this.render();
     }
+
+    if (this.entity && oldHass?.states[this.entity] !== hass.states[this.entity]) this.sheet?.sync();
   }
 
   get hass() {
@@ -164,6 +175,8 @@ export class HomeCard extends HTMLElement {
     }
 
     const isEditMode = this.isEditMode();
+    const media = this.mediaModel(state);
+    this.applyMediaArtwork(media);
 
     let iconElement: string;
     const thermostat = this.thermostatLayout(state, entityData);
@@ -238,7 +251,7 @@ export class HomeCard extends HTMLElement {
       <style>
         ${getCardStyles()}
       </style>
-      <div class="home-glass-card hg-glass hg-pressable ${isEditMode ? 'edit-mode' : ''} ${DashboardConfig.isUnavailable(state) ? 'unavailable' : ''} ${this.domain === 'camera' && this.cameraView === 'snapshot' ? 'camera-card' : ''} ${RTLHelper.isRTL() ? 'rtl' : 'ltr'}" role="button" tabindex="0"${this.domain === 'camera' ? ` aria-label="${escapeHtml(name)}"` : ''}>
+      <div class="home-glass-card hg-glass hg-pressable ${isEditMode ? 'edit-mode' : ''} ${DashboardConfig.isUnavailable(state) ? 'unavailable' : ''} ${this.domain === 'camera' && this.cameraView === 'snapshot' ? 'camera-card' : ''} ${media ? 'media-card' : ''} ${RTLHelper.isRTL() ? 'rtl' : 'ltr'}" role="button" tabindex="0"${this.domain === 'camera' ? ` aria-label="${escapeHtml(name)}"` : ''}>
         <div class="card-info">
           ${iconElement}
           ${
@@ -268,8 +281,9 @@ export class HomeCard extends HTMLElement {
                 : `
           <div class="text-content">
             <div class="entity-name">${escapeHtml(name)}</div>
-            ${this.domain === 'scene' || this.domain === 'script' || this.domain === 'button' || this.domain === 'input_button' ? '' : `<div class="entity-state">${escapeHtml(entityData.stateText)}</div>`}
+            ${this.domain === 'scene' || this.domain === 'script' || this.domain === 'button' || this.domain === 'input_button' ? '' : `<div class="entity-state">${escapeHtml(media?.line ?? entityData.stateText)}</div>`}
           </div>
+          ${media?.canPlayPause ? this.mediaPlayButtonHtml(media) : ''}
           `
           }
         </div>
@@ -324,9 +338,15 @@ export class HomeCard extends HTMLElement {
       nameEl.textContent = name;
     }
 
+    const media = this.mediaModel(state);
+    if (this.domain === 'media_player' && this.mediaKeyOf(media) !== this.mediaKey) {
+      this.render();
+      return;
+    }
+
     const stateEl = this.shadowRoot.querySelector('.entity-state');
     if (stateEl) {
-      stateEl.textContent = entityData.stateText;
+      stateEl.textContent = media?.line ?? entityData.stateText;
     }
 
     if (this.domain === 'climate' || this.domain === 'water_heater') {
@@ -366,6 +386,15 @@ export class HomeCard extends HTMLElement {
     this.boundCardClick = this.handleCardClick.bind(this);
     this.boundIconClick = this.handleIconClick.bind(this);
     this.boundCardKeydown = this.handleCardKeydown.bind(this);
+
+    this.gesture?.detach();
+    this.gesture = card
+      ? attachQuickControlsGesture(
+          card,
+          () => this.openQuickControls(),
+          () => !this.isEditMode()
+        )
+      : undefined;
 
     card?.addEventListener('click', this.boundCardClick);
     card?.addEventListener('keydown', this.boundCardKeydown as EventListener);
@@ -502,6 +531,45 @@ export class HomeCard extends HTMLElement {
     `;
   }
 
+  private mediaModel(state: any): MediaTileModel | null {
+    if (this.domain !== 'media_player') return null;
+    const hassUrl = typeof this._hass?.hassUrl === 'function' ? (path: string) => this._hass.hassUrl(path) : undefined;
+    return mediaTileModel(state, hassUrl);
+  }
+
+  private mediaKeyOf(media: MediaTileModel | null): string {
+    return media ? `${media.artwork}|${media.playing}|${media.canPlayPause}` : '';
+  }
+
+  private applyMediaArtwork(media: MediaTileModel | null) {
+    this.mediaKey = this.mediaKeyOf(media);
+    if (media) this.style.setProperty('--media-art', `url(${JSON.stringify(media.artwork)})`);
+    else this.style.removeProperty('--media-art');
+  }
+
+  private mediaPlayButtonHtml(media: MediaTileModel): string {
+    const label = media.playing
+      ? localize('quick_controls.pause', 'Pause')
+      : localize('quick_controls.play', 'Play');
+    return `<button type="button" class="media-play-btn" aria-label="${escapeHtml(label)}"><ha-icon icon="${media.playing ? 'mdi:pause' : 'mdi:play'}"></ha-icon></button>`;
+  }
+
+  private openQuickControls() {
+    if (this.sheet || !this._hass || !this.entity || this.isEditMode()) return;
+    const entityId = this.entity;
+    this.sheet = openQuickControls({
+      entityId,
+      getHass: () => this._hass,
+      describe: (state) =>
+        DashboardConfig.getEntityData(state as any, this.domain!, this.isTall, false, this._hass).stateText,
+      openMoreInfo: () => this.openMoreInfo(),
+      returnFocus: () => this.shadowRoot?.querySelector<HTMLElement>('.home-glass-card') ?? null,
+      onClosed: () => {
+        this.sheet = undefined;
+      },
+    }) ?? undefined;
+  }
+
   private openMoreInfo() {
     this.dispatchEvent(
       new CustomEvent('hass-more-info', {
@@ -515,7 +583,13 @@ export class HomeCard extends HTMLElement {
   private handleCardClick(event: Event) {
     if (!this._hass || !this.entity || this.isEditMode()) return;
 
+    if (this.gesture?.consumeClick()) return;
+
     const target = event.target as HTMLElement;
+    if (target.closest('.media-play-btn')) {
+      this._hass.callService('media_player', 'media_play_pause', { entity_id: this.entity });
+      return;
+    }
     const chevron = target.closest('.chevron-btn');
     if (chevron) {
       this.adjustTemperature(chevron.classList.contains('chevron-up') ? 1 : -1);
