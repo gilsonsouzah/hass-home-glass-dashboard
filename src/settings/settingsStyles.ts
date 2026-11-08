@@ -499,4 +499,11 @@ export const PRESETS_CSS = `${sheetCSS('.presets-selection-modal', '.presets-sel
   font-weight: 600;
   color: var(--hg-label);
 }
+
+.preset-phase {
+  text-align: center;
+  font-size: var(--hg-text-caption1-size);
+  line-height: var(--hg-text-caption1-line);
+  color: var(--hg-label-secondary);
+}
 `;

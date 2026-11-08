@@ -1,4 +1,6 @@
 import { BackgroundManager } from '../utils/BackgroundManager';
+import { DYNAMIC_PRESET, PHASE_LABELS_EN } from '../utils/dynamicBackground';
+import { escapeHtml } from '../utils/html';
 import { localize } from '../utils/LocalizationService';
 import { LiquidGlassClasses } from '../utils/LiquidGlassStyles';
 import type { HomeSettingsData } from './settingsData';
@@ -9,6 +11,12 @@ const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 const formatPresetName = (presetName: string): string =>
   localize(`wallpaper_presets.${presetName}`, presetName.charAt(0).toUpperCase() + presetName.slice(1));
+
+const phaseCaption = (presetName: string): string => {
+  if (presetName !== DYNAMIC_PRESET) return '';
+  const phase = BackgroundManager.getCurrentPhase();
+  return `<div class="preset-phase">${escapeHtml(localize(`wallpaper_phases.${phase}`, PHASE_LABELS_EN[phase]))}</div>`;
+};
 
 export function updateWallpaperPreview(modal: HTMLElement | undefined, temp: HomeSettingsData): void {
   const previewElement = modal?.querySelector('#current-wallpaper-preview') as HTMLElement;
@@ -90,9 +98,10 @@ export function openPresetsView(temp: HomeSettingsData, onChange: () => void): v
           <div class="presets-grid">
             ${BackgroundManager.getPresetNames().map(presetName => `
               <div class="preset-option ${temp.backgroundType === 'preset' && temp.presetBackground === presetName ? 'selected' : ''}"
-                   data-preset="${presetName}" role="button" tabindex="0" aria-pressed="${temp.backgroundType === 'preset' && temp.presetBackground === presetName}">
+                   data-preset="${escapeHtml(presetName)}" role="button" tabindex="0" aria-pressed="${temp.backgroundType === 'preset' && temp.presetBackground === presetName}">
                 <div class="preset-preview" style="background: ${BackgroundManager.getPresetBackground(presetName)}"></div>
-                <div class="preset-name">${formatPresetName(presetName)}</div>
+                <div class="preset-name">${escapeHtml(formatPresetName(presetName))}</div>
+                ${phaseCaption(presetName)}
               </div>
             `).join('')}
           </div>
