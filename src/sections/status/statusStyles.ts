@@ -7,12 +7,11 @@ export const statusChipStyles = `
   width: 100%;
 }
 
-/* Use same structure as scenes carousel */
 .status-carousel-container {
   overflow-x: auto;
   overflow-y: hidden;
-  margin-inline-start: calc(-1 * var(--apple-page-padding, 22px));
-  margin-inline-end: calc(-1 * var(--apple-page-padding, 22px));
+  margin-inline-start: calc(-1 * var(--hg-page-padding));
+  margin-inline-end: calc(-1 * var(--hg-page-padding));
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -26,8 +25,8 @@ export const statusChipStyles = `
   display: inline-flex;
   gap: 28px;
   align-items: center;
-  padding-inline-start: var(--apple-page-padding, 22px);
-  padding-inline-end: var(--apple-page-padding, 22px);
+  padding-inline-start: var(--hg-page-padding);
+  padding-inline-end: var(--hg-page-padding);
   min-width: 100%;
   box-sizing: border-box;
   height: 48px;
@@ -36,18 +35,27 @@ export const statusChipStyles = `
 .status-chip {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: transparent;
-  color: white;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+  gap: var(--hg-chip-gap);
+  color: var(--hg-label);
+  font-family: var(--hg-font);
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
-  min-height: 32px;
+  min-height: var(--hg-hit-min);
   white-space: nowrap;
   flex-shrink: 0;
+  border-radius: var(--hg-radius-control);
+  transition: transform var(--hg-dur-fast) var(--hg-ease-spring), opacity var(--hg-dur) var(--hg-ease-standard);
+}
+
+.status-chip:active {
+  transform: scale(var(--hg-press-scale));
+}
+
+.status-chip:focus-visible {
+  outline: var(--hg-focus-ring);
+  outline-offset: var(--hg-focus-offset);
 }
 
 .status-chip-icon {
@@ -56,54 +64,47 @@ export const statusChipStyles = `
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--hg-label);
 }
 
 .status-chip-icon ha-icon {
   width: 20px;
   height: 20px;
-  color: white;
+  color: var(--hg-label);
 }
 
 .status-chip-content {
   display: flex;
   flex-direction: column;
-  gap: 0px;
 }
 
 .status-chip-label {
-  font-size: var(--apple-chip-name-size, 13px);
-  font-weight: 600;
-  color: white;
+  font-size: var(--hg-text-footnote-size);
+  font-weight: var(--hg-text-headline-weight);
   line-height: 1.2;
   letter-spacing: -0.2px;
 }
 
 .status-chip-value {
-  font-size: var(--apple-chip-status-size, 11px);
+  font-size: var(--hg-text-caption2-size);
   font-weight: 500;
-  color: white;
   line-height: 1.2;
-  opacity: 0.9;
+  color: var(--hg-label-secondary);
+  font-variant-numeric: tabular-nums;
 }
 `;
 
 export const statusModalStyles = `
 .status-modal-backdrop {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   z-index: 10000;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--hg-glass-dim);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--hg-dur) var(--hg-ease-standard);
 }
 
 .status-modal-backdrop.show {
@@ -111,18 +112,18 @@ export const statusModalStyles = `
 }
 
 .status-modal-content {
-  position: relative;
   width: 800px;
   max-width: 90vw;
   max-height: 80vh;
-  background: rgba(28, 28, 30, 1);
-  border-radius: var(--apple-modal-radius, 20px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-  transform: scale(0.9);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--hg-radius-sheet);
+  color: var(--hg-label);
+  font-family: var(--hg-font);
+  transform: scale(0.94);
   opacity: 0;
-  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: transform var(--hg-dur) var(--hg-ease-spring), opacity var(--hg-dur) var(--hg-ease-standard);
 }
 
 .status-modal-backdrop.show .status-modal-content {
@@ -130,43 +131,38 @@ export const statusModalStyles = `
   opacity: 1;
 }
 
-/* Liquid Glass Button Styles */
 ${liquidGlassCSS}
 
+/* The sheet already blurs the backdrop; a second backdrop-filter inside it only costs GPU. */
+.status-modal-header .liquid-glass-btn {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
 .status-modal-header {
-  background: transparent;
+  position: relative;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  position: sticky;
-  top: 0;
   z-index: 10;
 }
 
 .status-modal-header::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: -30px;
-  background: linear-gradient(
-    to bottom,
-    rgba(28, 28, 30, 1) 0%,
-    rgba(28, 28, 30, 0.95) 30%,
-    rgba(28, 28, 30, 0.7) 60%,
-    rgba(28, 28, 30, 0) 100%
-  );
+  inset: 0 0 -30px;
+  background: linear-gradient(to bottom, var(--hg-glass-thick) 30%, transparent);
   z-index: -1;
   pointer-events: none;
 }
 
 .status-modal-header h2 {
   margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-  color: white;
+  font-size: var(--hg-text-headline-size);
+  font-weight: var(--hg-text-headline-weight);
+  color: var(--hg-label);
   text-align: center;
   flex: 1;
 }
@@ -177,14 +173,17 @@ ${liquidGlassCSS}
 
 .status-modal-body {
   padding: 0 20px 20px 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
 }
 
 .status-modal-room-title {
   margin: 0 0 8px 0;
-  font-size: 13px;
-  font-weight: 400;
+  font-size: var(--hg-text-footnote-size);
+  font-weight: var(--hg-text-body-weight);
   letter-spacing: 0.5px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--hg-label-secondary);
   text-transform: uppercase;
 }
 
@@ -195,11 +194,10 @@ ${liquidGlassCSS}
 .status-modal-cards {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  grid-auto-rows: var(--apple-card-height, 70px);
-  gap: var(--apple-card-gap, 10px);
+  grid-auto-rows: var(--hg-card-height);
+  gap: var(--hg-card-gap);
   auto-rows: min-content;
-  margin-bottom: var(--apple-section-gap, 20px);
-  /* Enable container queries for modal */
+  margin-bottom: var(--hg-section-gap);
   container-type: inline-size;
 }
 
@@ -211,8 +209,8 @@ ${liquidGlassCSS}
   display: flex;
   flex-direction: column;
   position: relative;
-  grid-column: span var(--apple-card-span-desktop, 3);
-  border-radius: var(--apple-card-radius, 22px);
+  grid-column: span var(--hg-card-span-desktop);
+  border-radius: var(--hg-radius-tile);
   overflow: hidden;
 }
 
@@ -223,36 +221,32 @@ ${liquidGlassCSS}
 .entity-card-wrapper home-glass-card {
   width: 100%;
   height: 100%;
-  border-radius: var(--apple-card-radius, 22px);
+  border-radius: var(--hg-radius-tile);
 }
 
-/* Large modal (1100px+) - 4 columns */
 @container (min-width: 900px) {
   .entity-card-wrapper {
-    grid-column: span var(--apple-card-span-desktop, 3);
+    grid-column: span var(--hg-card-span-desktop);
   }
 }
 
-/* Medium modal (600px - 899px) - 3 columns */
 @container (min-width: 600px) and (max-width: 899px) {
   .entity-card-wrapper {
-    grid-column: span var(--apple-card-span-mobile, 4);
+    grid-column: span var(--hg-card-span-mobile);
   }
 }
 
-/* Small modal (400px - 599px) - 2 columns */
 @container (min-width: 400px) and (max-width: 599px) {
   .entity-card-wrapper {
-    grid-column: span var(--apple-card-span-small, 6);
+    grid-column: span var(--hg-card-span-small);
   }
 
   .status-modal-cards {
     grid-auto-rows: 68px;
-    gap: 10px;
+    gap: var(--hg-card-gap);
   }
 }
 
-/* Extra small modal (< 400px) - single column */
 @container (max-width: 399px) {
   .entity-card-wrapper {
     grid-column: span 12 !important;
@@ -264,7 +258,6 @@ ${liquidGlassCSS}
   }
 }
 
-/* Fallback media queries for older browsers */
 @media (max-width: 767px) {
   .entity-card-wrapper {
     grid-column: span 6;
@@ -272,7 +265,7 @@ ${liquidGlassCSS}
 
   .status-modal-cards {
     grid-auto-rows: 68px;
-    gap: 10px;
+    gap: var(--hg-card-gap);
   }
 }
 
@@ -292,11 +285,12 @@ ${liquidGlassCSS}
     max-width: 100vw;
     height: calc(100dvh - env(safe-area-inset-top) - 20px);
     max-height: calc(100dvh - env(safe-area-inset-top) - 20px);
-    border-radius: var(--apple-modal-radius, 20px) var(--apple-modal-radius, 20px) 0 0;
+    border-radius: var(--hg-radius-sheet) var(--hg-radius-sheet) 0 0;
     transform: translateY(100%);
   }
 
   .status-modal-backdrop.show .status-modal-content {
     transform: translateY(0);
   }
+}
 `;

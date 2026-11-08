@@ -16,7 +16,7 @@ export async function openStatusModal(
   modal.className = 'status-modal-backdrop';
 
   const modalContent = document.createElement('div');
-  modalContent.className = 'status-modal-content';
+  modalContent.className = 'status-modal-content hg-glass--thick';
 
   const header = document.createElement('div');
   header.className = 'status-modal-header';
@@ -257,7 +257,7 @@ async function createAndAppendCard(
         }
       } else {
         cardElement = document.createElement('div');
-        cardElement.innerHTML = `<div style="color: red;">Unknown card type: ${cardConfig.type}</div>`;
+        cardElement.innerHTML = `<div style="color: var(--hg-color-red);">Unknown card type: ${escapeHtml(cardConfig.type)}</div>`;
       }
     }
 
