@@ -503,6 +503,10 @@ export class DashboardConfig {
         return 'mdi:gesture-tap-button';
       case 'vacuum':
         return 'mdi:robot-vacuum';
+      case 'scene':
+        return 'mdi:palette';
+      case 'script':
+        return 'mdi:script-text';
       case 'sensor': {
         const dc = attributes?.device_class;
         if (dc === 'energy') return 'mdi:flash';
