@@ -1,5 +1,10 @@
 import { CustomizationManager } from '../utils/CustomizationManager';
 import { localize } from '../utils/LocalizationService';
+import { escapeHtml } from '../utils/html';
+import {
+  averageSoc, buildBars, gasTotal, powerCandidates, previousRange, selfSufficiency, socCandidates, statIds, sumPower, sumStats,
+  type BarData, type Period,
+} from './energyCalc';
 
 interface EnergyPrefs {
   energy_sources?: Array<{
@@ -20,25 +25,27 @@ interface EnergyPrefs {
   device_consumption?: Array<{ stat_consumption: string }>;
 }
 
-interface BarData {
-  label: string;
-  value: number;
-}
-
 interface EnergyData {
   currentPower: number | null;
   todayTotal: number | null;
   hourlyData: BarData[];
   solarPower: number | null;
-  solarToday: number | null;
   batteryPercent: number | null;
-  gridReturn: number | null;
   gasToday: number | null;
   gasUnit: string;
   hasSolar: boolean;
   hasBattery: boolean;
   hasGas: boolean;
-  gridEntityId: string | null;
+  gridGroups: string[][];
+  solarGroups: string[][];
+  batteryGroups: string[][];
+}
+
+interface HomeCardLive {
+  data: EnergyData;
+  power: HTMLElement;
+  solar: HTMLElement | null;
+  battery: HTMLElement | null;
 }
 
 interface FullEnergyData {
@@ -73,8 +80,6 @@ interface DeviceConsumption {
   percentage: number;
 }
 
-type Period = 'day' | 'week' | 'month';
-
 export class EnergySection {
   private customizationManager: CustomizationManager;
   private prefsCache: { data: EnergyPrefs; timestamp: number } | null = null;
@@ -85,6 +90,9 @@ export class EnergySection {
   private selectedPeriod: Period = 'day';
   private currentContainer: HTMLElement | null = null;
   private currentHass: any = null;
+  private periodRun = 0;
+  private homeLive: HomeCardLive | null = null;
+  private pageLive: { groups: string[][]; value: HTMLElement } | null = null;
 
   constructor(customizationManager: CustomizationManager) {
     this.customizationManager = customizationManager;
@@ -93,12 +101,30 @@ export class EnergySection {
   async render(container: HTMLElement, hass: any, context: 'home' | 'group' = 'home'): Promise<void> {
     this.currentContainer = container;
     this.currentHass = hass;
+    this.homeLive = null;
+    this.pageLive = null;
 
     if (context === 'group') {
       await this.renderFullPage(container, hass);
     } else {
       await this.renderHomeCard(container, hass);
     }
+  }
+
+  /** Refreshes live power/battery readings from hass without refetching statistics. */
+  update(hass: any): void {
+    this.currentHass = hass;
+    const home = this.homeLive;
+    if (home) {
+      const { data } = home;
+      setText(home.power, this.powerText(sumPower(hass, data.gridGroups)));
+      if (home.solar) setText(home.solar, `${localize('energy.solar')} ${this.powerText(sumPower(hass, data.solarGroups))}`);
+      if (home.battery) {
+        const pct = averageSoc(hass, data.batteryGroups);
+        setText(home.battery, `${localize('energy.battery')} ${pct !== null ? `${Math.round(pct)}%` : '--'}`);
+      }
+    }
+    if (this.pageLive) setText(this.pageLive.value, this.powerText(sumPower(hass, this.pageLive.groups)));
   }
 
   // ==================== HOME CARD (compact) ====================
@@ -140,7 +166,7 @@ export class EnergySection {
 
     const currentPowerEl = document.createElement('div');
     currentPowerEl.className = 'energy-current-power';
-    currentPowerEl.textContent = energyData.currentPower !== null ? this.formatPower(energyData.currentPower) : '--';
+    currentPowerEl.textContent = this.powerText(energyData.currentPower);
 
     const todayEl = document.createElement('div');
     todayEl.className = 'energy-today-total';
@@ -156,7 +182,8 @@ export class EnergySection {
       card.appendChild(chartContainer);
     }
 
-    // Solar / Battery / Gas row
+    let solarSpan: HTMLElement | null = null;
+    let batterySpan: HTMLElement | null = null;
     if (energyData.hasSolar || energyData.hasBattery || energyData.hasGas) {
       const extraRow = document.createElement('div');
       extraRow.className = 'energy-extra-row';
@@ -164,10 +191,10 @@ export class EnergySection {
       if (energyData.hasSolar) {
         const solarEl = document.createElement('div');
         solarEl.className = 'energy-extra-item';
-        const solarPowerText = energyData.solarPower !== null ? this.formatPower(energyData.solarPower) : '--';
         solarEl.innerHTML = `
-          <div class="energy-extra-main"><ha-icon icon="mdi:solar-power" class="energy-extra-icon solar"></ha-icon><span>${localize('energy.solar')} ${solarPowerText}</span></div>
+          <div class="energy-extra-main"><ha-icon icon="mdi:solar-power" class="energy-extra-icon solar"></ha-icon><span>${localize('energy.solar')} ${this.powerText(energyData.solarPower)}</span></div>
         `;
+        solarSpan = solarEl.querySelector('span');
         extraRow.appendChild(solarEl);
       }
 
@@ -178,6 +205,7 @@ export class EnergySection {
         batteryEl.innerHTML = `
           <div class="energy-extra-main"><ha-icon icon="mdi:battery" class="energy-extra-icon battery"></ha-icon><span>${localize('energy.battery')} ${batteryText}</span></div>
         `;
+        batterySpan = batteryEl.querySelector('span');
         extraRow.appendChild(batteryEl);
       }
 
@@ -195,6 +223,7 @@ export class EnergySection {
     }
 
     container.appendChild(card);
+    this.homeLive = { data: energyData, power: currentPowerEl, solar: solarSpan, battery: batterySpan };
   }
 
   // ==================== FULL PAGE (energy dashboard) ====================
@@ -210,16 +239,16 @@ export class EnergySection {
     currentHeader.className = 'energy-page-current';
     const prefs = await this.getEnergyPrefs(hass);
     const gridSources = prefs?.energy_sources?.filter((s: any) => s.type === 'grid') || [];
-    const gridFromEntities = this.getGridFromEntities(gridSources);
-    const currentPower = this.findCurrentPower(hass, gridFromEntities);
+    const gridGroups = powerCandidates(hass, this.getGridFromEntities(gridSources));
 
     currentHeader.innerHTML = `
       <div class="energy-page-current-left">
         <ha-icon icon="mdi:flash" class="energy-page-icon"></ha-icon>
         <span class="energy-page-current-label">${localize('energy.current_usage')}</span>
       </div>
-      <div class="energy-page-current-value">${currentPower !== null ? this.formatPower(currentPower) : '--'}</div>
+      <div class="energy-page-current-value">${this.powerText(sumPower(hass, gridGroups))}</div>
     `;
+    this.pageLive = { groups: gridGroups, value: currentHeader.querySelector('.energy-page-current-value') as HTMLElement };
     wrapper.appendChild(currentHeader);
 
     // Period selector
@@ -264,22 +293,23 @@ export class EnergySection {
     const dynamicArea = this.currentContainer.querySelector('.energy-dynamic-area') as HTMLElement;
     if (!dynamicArea) return;
 
-    // Fade out
+    const run = ++this.periodRun;
     dynamicArea.style.opacity = '0';
     await new Promise(resolve => setTimeout(resolve, 200));
+    if (run !== this.periodRun) return;
 
-    await this.updateDynamicContent(dynamicArea, this.currentHass);
+    await this.updateDynamicContent(dynamicArea, this.currentHass, run);
+    if (run !== this.periodRun) return;
 
-    // Fade in
     requestAnimationFrame(() => {
       dynamicArea.style.opacity = '1';
     });
   }
 
-  private async updateDynamicContent(dynamicArea: HTMLElement, hass: any): Promise<void> {
-    dynamicArea.innerHTML = '';
-
+  private async updateDynamicContent(dynamicArea: HTMLElement, hass: any, run = this.periodRun): Promise<void> {
     const data = await this.fetchFullEnergyData(hass, this.selectedPeriod);
+    if (run !== this.periodRun) return;
+    dynamicArea.innerHTML = '';
     if (!data) {
       dynamicArea.innerHTML = `<div class="energy-no-data">${localize('energy.no_data')}</div>`;
       return;
@@ -517,7 +547,7 @@ export class EnergySection {
 
       row.innerHTML = `
         <div class="device-row-info">
-          <span class="device-row-name">${device.name}</span>
+          <span class="device-row-name">${escapeHtml(device.name)}</span>
           <span class="device-row-value">${this.formatEnergy(device.consumption)}</span>
         </div>
         <div class="device-row-bar-container">
@@ -556,7 +586,6 @@ export class EnergySection {
         if (i === currentHour) bar.classList.add('current');
         if (i > currentHour) bar.classList.add('future');
       } else if (period === 'week') {
-        const today = new Date().getDay();
         // barData is ordered from 6 days ago to today
         if (i === barData.length - 1) bar.classList.add('current');
       } else {
@@ -606,7 +635,6 @@ export class EnergySection {
       }
     } else {
       // For week/month, show labels at start/middle/end
-      const lang = this.currentHass?.locale?.language || this.currentHass?.language || 'en';
       const total = barData.length;
       const indices = total <= 7
         ? barData.map((_, i) => i) // show all for week
@@ -646,6 +674,10 @@ export class EnergySection {
 
   // ==================== FORMATTING ====================
 
+  private powerText(watts: number | null): string {
+    return watts !== null ? this.formatPower(watts) : '--';
+  }
+
   private formatPower(watts: number): string {
     if (watts >= 1000) {
       return `${(watts / 1000).toFixed(1)} kW`;
@@ -676,112 +708,53 @@ export class EnergySection {
 
   // ==================== DATA FETCHING ====================
 
+  private splitSources(prefs: EnergyPrefs, showGas: boolean) {
+    const sources = prefs.energy_sources ?? [];
+    const ofType = (type: string) => sources.filter((s) => s.type === type);
+    return { grid: ofType('grid'), solar: ofType('solar'), battery: ofType('battery'), gas: showGas ? ofType('gas') : [] };
+  }
+
   private async fetchEnergyData(hass: any): Promise<EnergyData | null> {
     try {
       const prefs = await this.getEnergyPrefs(hass);
       if (!prefs?.energy_sources?.length) return null;
 
-      const showGas = await this.customizationManager.getShowGas();
+      const { grid, solar, battery, gas } = this.splitSources(prefs, await this.customizationManager.getShowGas());
+      if (grid.length === 0) return null;
 
-      const gridSources = prefs.energy_sources.filter((s: any) => s.type === 'grid');
-      const solarSource = prefs.energy_sources.find((s: any) => s.type === 'solar');
-      const batterySource = prefs.energy_sources.find((s: any) => s.type === 'battery');
-      const gasSource = showGas ? prefs.energy_sources.find((s: any) => s.type === 'gas') : undefined;
-
-      if (gridSources.length === 0) return null;
-
-      const gridFromEntities = this.getGridFromEntities(gridSources);
-      const currentPower = this.findCurrentPower(hass, gridFromEntities);
+      const gridFromEntities = this.getGridFromEntities(grid);
+      const solarEntities = statIds(solar, 'stat_energy_from');
+      const gasEntities = statIds(gas, 'stat_energy_from');
+      const gridGroups = powerCandidates(hass, gridFromEntities);
+      const solarGroups = powerCandidates(hass, solarEntities);
+      const batteryGroups = statIds(battery, 'stat_energy_from').map((id) => socCandidates(hass, id)).filter((g) => g.length);
 
       const now = new Date();
       const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const stats = await this.fetchPeriodStatistics(hass, gridFromEntities, startOfDay, now, 'hour');
+      const lang = hass.locale?.language || hass.language || 'en';
+      const [stats, gasUnits] = await Promise.all([
+        this.fetchPeriodStatistics(hass, [...gridFromEntities, ...gasEntities], startOfDay, now, 'hour'),
+        this.fetchStatisticUnits(hass, gasEntities)
+      ]);
 
-      let todayTotal = 0;
-      const hourlyData: BarData[] = [];
-
-      if (stats) {
-        // Initialize all 24 hours
-        for (let h = 0; h < 24; h++) {
-          hourlyData.push({ label: h.toString().padStart(2, '0'), value: 0 });
-        }
-        for (const entityId of gridFromEntities) {
-          const entityStats = stats[entityId];
-          if (!entityStats) continue;
-          for (const stat of entityStats) {
-            const hour = new Date(stat.start).getHours();
-            const change = stat.change ?? 0;
-            todayTotal += change;
-            hourlyData[hour].value += change;
-          }
-        }
-      }
-
-      // Solar
-      let solarPower: number | null = null;
-      let solarToday: number | null = null;
-      if (solarSource) {
-        const solarEntity = (solarSource as any).stat_energy_from;
-        if (solarEntity) {
-          solarPower = this.findCurrentPower(hass, [solarEntity]);
-          const solarStats = await this.fetchPeriodStatistics(hass, [solarEntity], startOfDay, now, 'hour');
-          if (solarStats?.[solarEntity]) {
-            solarToday = solarStats[solarEntity].reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-          }
-        }
-      }
-
-      // Battery
-      let batteryPercent: number | null = null;
-      if (batterySource) {
-        const battFromEntity = (batterySource as any).stat_energy_from;
-        if (battFromEntity) {
-          batteryPercent = this.findBatterySoc(hass, battFromEntity);
-        }
-      }
-
-      // Grid return
-      const gridToEntities = this.getGridToEntities(gridSources);
-      let gridReturn: number | null = null;
-      if (gridToEntities.length > 0) {
-        const returnStats = await this.fetchPeriodStatistics(hass, gridToEntities, startOfDay, now, 'hour');
-        if (returnStats) {
-          gridReturn = 0;
-          for (const entityId of gridToEntities) {
-            const entityStats = returnStats[entityId];
-            if (entityStats) {
-              gridReturn += entityStats.reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-            }
-          }
-        }
-      }
-
-      // Gas
-      let gasToday: number | null = null;
-      let gasUnit = 'm³';
-      if (gasSource?.stat_energy_from) {
-        const gasEntity = gasSource.stat_energy_from;
-        gasUnit = hass.states[gasEntity]?.attributes?.unit_of_measurement || gasUnit;
-        const gasStats = await this.fetchPeriodStatistics(hass, [gasEntity], startOfDay, now, 'hour');
-        if (gasStats?.[gasEntity]) {
-          gasToday = gasStats[gasEntity].reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-        }
-      }
+      const todayTotal = sumStats(stats, gridFromEntities) ?? 0;
+      const hourlyData = stats ? buildBars(gridFromEntities.map((id) => stats[id] ?? []), 'day', startOfDay, lang) : [];
+      const gasToday = gasTotal(stats, gasEntities, gasUnits, 'm³');
 
       return {
-        currentPower,
+        currentPower: sumPower(hass, gridGroups),
         todayTotal: todayTotal > 0 ? todayTotal : null,
         hourlyData,
-        solarPower,
-        solarToday,
-        batteryPercent,
-        gridReturn,
-        gasToday,
-        gasUnit,
-        hasSolar: !!solarSource,
-        hasBattery: !!batterySource,
-        hasGas: !!gasSource,
-        gridEntityId: gridFromEntities[0] || null
+        solarPower: sumPower(hass, solarGroups),
+        batteryPercent: averageSoc(hass, batteryGroups),
+        gasToday: gasToday.total,
+        gasUnit: gasToday.unit,
+        hasSolar: solar.length > 0,
+        hasBattery: battery.length > 0,
+        hasGas: gas.length > 0,
+        gridGroups,
+        solarGroups,
+        batteryGroups
       };
     } catch (err) {
       console.error('EnergySection: Error fetching energy data:', err);
@@ -795,196 +768,81 @@ export class EnergySection {
       if (!prefs?.energy_sources?.length) return null;
 
       const showCost = await this.customizationManager.getShowCost();
-      const showGas = await this.customizationManager.getShowGas();
+      const { grid, solar, battery, gas } = this.splitSources(prefs, await this.customizationManager.getShowGas());
+      if (grid.length === 0) return null;
 
-      const gridSources = prefs.energy_sources.filter((s: any) => s.type === 'grid');
-      const solarSource = prefs.energy_sources.find((s: any) => s.type === 'solar');
-      const batterySource = prefs.energy_sources.find((s: any) => s.type === 'battery');
-      const gasSource = showGas ? prefs.energy_sources.find((s: any) => s.type === 'gas') : undefined;
-
-      if (gridSources.length === 0) return null;
-
-      const gridFromEntities = this.getGridFromEntities(gridSources);
-      const gridToEntities = this.getGridToEntities(gridSources);
-      const costEntities = this.getGridCostEntities(gridSources);
-
-      const currentPower = this.findCurrentPower(hass, gridFromEntities);
+      const gridFromEntities = this.getGridFromEntities(grid);
+      const gridToEntities = this.getGridToEntities(grid);
+      const solarEntities = statIds(solar, 'stat_energy_from');
+      const batteryFromEntities = statIds(battery, 'stat_energy_from');
+      const batteryToEntities = statIds(battery, 'stat_energy_to');
+      const gasEntities = statIds(gas, 'stat_energy_from');
 
       const { start, end, statPeriod } = this.getStartDateForPeriod(period);
-      const { start: prevStart, end: prevEnd } = this.getPreviousPeriodDates(period);
+      const { start: prevStart, end: prevEnd } = previousRange(start, end, period);
       const lang = hass.locale?.language || hass.language || 'en';
 
-      // Fetch all stats in parallel
-      const allEntities = [...gridFromEntities];
-      const solarEntity = solarSource ? (solarSource as any).stat_energy_from : null;
-      if (solarEntity) allEntities.push(solarEntity);
-      const battFromEntity = batterySource ? (batterySource as any).stat_energy_from : null;
-      const battToEntity = batterySource ? (batterySource as any).stat_energy_to : null;
-      if (battFromEntity) allEntities.push(battFromEntity);
-      if (battToEntity) allEntities.push(battToEntity);
-      allEntities.push(...gridToEntities);
-      allEntities.push(...costEntities);
-      const gasEntity = gasSource ? (gasSource as any).stat_energy_from : null;
-      const gasCostEntity = gasSource ? (gasSource as any).stat_cost : null;
-      if (gasEntity) allEntities.push(gasEntity);
-      if (gasCostEntity) allEntities.push(gasCostEntity);
+      const allEntities = [...new Set([
+        ...gridFromEntities, ...gridToEntities, ...this.getGridCostEntities(grid),
+        ...solarEntities, ...batteryFromEntities, ...batteryToEntities,
+        ...gasEntities, ...statIds(gas, 'stat_cost')
+      ])];
 
-      const prevEntities = gasEntity ? [...gridFromEntities, gasEntity] : gridFromEntities;
-
-      const [currentStats, prevStats, deviceData] = await Promise.all([
+      const [currentStats, prevStats, deviceData, gasUnits] = await Promise.all([
         this.fetchPeriodStatistics(hass, allEntities, start, end, statPeriod),
-        this.fetchPeriodStatistics(hass, prevEntities, prevStart, prevEnd, statPeriod),
-        this.fetchDeviceConsumption(hass, prefs, start, end, statPeriod)
+        this.fetchPeriodStatistics(hass, [...gridFromEntities, ...gasEntities], prevStart, prevEnd, statPeriod),
+        this.fetchDeviceConsumption(hass, prefs, start, end, statPeriod),
+        this.fetchStatisticUnits(hass, gasEntities)
       ]);
 
-      // Process grid consumption
-      let periodTotal = 0;
-      const barDataMap = new Map<string, number>();
+      const barsFor = (ids: string[]) => buildBars(ids.map((id) => currentStats?.[id] ?? []), period, start, lang);
 
-      if (currentStats) {
-        for (const entityId of gridFromEntities) {
-          const entityStats = currentStats[entityId];
-          if (!entityStats) continue;
-          for (const stat of entityStats) {
-            const change = stat.change ?? 0;
-            periodTotal += change;
-            const key = this.getBarLabel(stat.start, period, lang);
-            barDataMap.set(key, (barDataMap.get(key) || 0) + change);
-          }
-        }
-      }
+      const periodTotal = sumStats(currentStats, gridFromEntities) ?? 0;
+      const previousPeriodTotal = prevStats ? (sumStats(prevStats, gridFromEntities) ?? 0) : null;
+      const costTotal = showCost && currentStats ? this.computeGridCostTotal(grid, currentStats) : null;
 
-      // Build bar data array
-      const barData: BarData[] = [];
-      if (period === 'day') {
-        for (let h = 0; h < 24; h++) {
-          const label = h.toString().padStart(2, '0');
-          barData.push({ label, value: barDataMap.get(label) || 0 });
-        }
-      } else {
-        // For week/month, iterate through the map in order
-        const allLabels = this.generatePeriodLabels(period, start, lang);
-        for (const label of allLabels) {
-          barData.push({ label, value: barDataMap.get(label) || 0 });
-        }
-      }
+      const solarPeriodTotal = sumStats(currentStats, solarEntities);
+      const solarPower = solarPeriodTotal !== null ? sumPower(hass, powerCandidates(hass, solarEntities)) : null;
 
-      // Previous period total
-      let previousPeriodTotal: number | null = null;
-      if (prevStats) {
-        previousPeriodTotal = 0;
-        for (const entityId of gridFromEntities) {
-          const entityStats = prevStats[entityId];
-          if (entityStats) {
-            previousPeriodTotal += entityStats.reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-          }
-        }
-      }
+      const batteryGroups = batteryFromEntities.map((id) => socCandidates(hass, id)).filter((g) => g.length);
+      const batteryCharged = sumStats(currentStats, batteryToEntities);
+      const batteryDischarged = sumStats(currentStats, batteryFromEntities);
+      const gridReturn = gridToEntities.length > 0 && currentStats ? (sumStats(currentStats, gridToEntities) ?? 0) : null;
 
-      // Cost
-      const costTotal = showCost && currentStats ? this.computeGridCostTotal(gridSources, currentStats) : null;
+      const selfSufficiencyPct = solarPeriodTotal !== null && solarPeriodTotal > 0
+        ? selfSufficiency({
+            gridImport: periodTotal,
+            solar: solarPeriodTotal,
+            gridReturn: gridReturn ?? 0,
+            batteryDischarge: batteryDischarged ?? 0,
+            batteryCharge: batteryCharged ?? 0
+          })
+        : null;
 
-      // Solar
-      let solarPower: number | null = null;
-      let solarPeriodTotal: number | null = null;
-      const solarBarData: BarData[] = [];
-      if (solarEntity && currentStats?.[solarEntity]) {
-        solarPower = this.findCurrentPower(hass, [solarEntity]);
-        solarPeriodTotal = 0;
-        const solarMap = new Map<string, number>();
-        for (const stat of currentStats[solarEntity]) {
-          const change = stat.change ?? 0;
-          solarPeriodTotal += change;
-          const key = this.getBarLabel(stat.start, period, lang);
-          solarMap.set(key, (solarMap.get(key) || 0) + change);
-        }
-        if (period === 'day') {
-          for (let h = 0; h < 24; h++) {
-            const label = h.toString().padStart(2, '0');
-            solarBarData.push({ label, value: solarMap.get(label) || 0 });
-          }
-        } else {
-          const labels = this.generatePeriodLabels(period, start, lang);
-          for (const label of labels) {
-            solarBarData.push({ label, value: solarMap.get(label) || 0 });
-          }
-        }
-      }
-
-      // Battery
-      let batteryPercent: number | null = null;
-      let batteryCharged: number | null = null;
-      let batteryDischarged: number | null = null;
-      if (batterySource) {
-        if (battFromEntity) {
-          batteryPercent = this.findBatterySoc(hass, battFromEntity);
-          if (currentStats?.[battFromEntity]) {
-            batteryDischarged = currentStats[battFromEntity].reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-          }
-        }
-        if (battToEntity && currentStats?.[battToEntity]) {
-          batteryCharged = currentStats[battToEntity].reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-        }
-      }
-
-      // Grid return
-      let gridReturn: number | null = null;
-      if (gridToEntities.length > 0 && currentStats) {
-        gridReturn = 0;
-        for (const entityId of gridToEntities) {
-          const entityStats = currentStats[entityId];
-          if (entityStats) {
-            gridReturn += entityStats.reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-          }
-        }
-      }
-
-      // Self-sufficiency
-      let selfSufficiency: number | null = null;
-      if (solarPeriodTotal !== null && solarPeriodTotal > 0 && periodTotal > 0) {
-        const solarUsed = solarPeriodTotal - (gridReturn || 0);
-        selfSufficiency = Math.min(100, Math.max(0, (solarUsed / periodTotal) * 100));
-      }
-
-      // Gas
-      let gasPeriodTotal: number | null = null;
-      let gasCostTotal: number | null = null;
-      const gasUnit = (gasEntity && hass.states[gasEntity]?.attributes?.unit_of_measurement) || 'm³';
-      if (gasEntity && currentStats?.[gasEntity]) {
-        gasPeriodTotal = currentStats[gasEntity].reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-      }
-      if (showCost && gasCostEntity && currentStats?.[gasCostEntity]) {
-        gasCostTotal = currentStats[gasCostEntity].reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-      } else if (showCost && gasPeriodTotal !== null && (gasSource as any)?.number_energy_price) {
-        gasCostTotal = gasPeriodTotal * (gasSource as any).number_energy_price;
-      }
-
-      let gasPreviousPeriodTotal: number | null = null;
-      if (gasEntity && prevStats?.[gasEntity]) {
-        gasPreviousPeriodTotal = prevStats[gasEntity].reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-      }
+      const gasNow = gasTotal(currentStats, gasEntities, gasUnits, 'm³');
+      const gasPrevious = gasTotal(prevStats, gasEntities, gasUnits, 'm³');
 
       return {
-        currentPower,
+        currentPower: sumPower(hass, powerCandidates(hass, gridFromEntities)),
         periodTotal: periodTotal > 0 ? periodTotal : null,
         previousPeriodTotal,
-        barData,
+        barData: barsFor(gridFromEntities),
         solarPower,
         solarPeriodTotal,
-        solarBarData,
-        batteryPercent,
+        solarBarData: solarPeriodTotal !== null ? barsFor(solarEntities) : [],
+        batteryPercent: averageSoc(hass, batteryGroups),
         batteryCharged,
         batteryDischarged,
         gridReturn,
-        selfSufficiency,
-        gasPeriodTotal,
-        gasCostTotal,
-        gasPreviousPeriodTotal,
-        gasUnit,
-        hasSolar: !!solarSource,
-        hasBattery: !!batterySource,
+        selfSufficiency: selfSufficiencyPct,
+        gasPeriodTotal: gasNow.total,
+        gasCostTotal: showCost ? this.computeGasCost(gas, gasNow.ids, currentStats) : null,
+        gasPreviousPeriodTotal: gasPrevious.total,
+        gasUnit: gasNow.unit,
+        hasSolar: solar.length > 0,
+        hasBattery: battery.length > 0,
         hasGridReturn: gridToEntities.length > 0,
-        hasGas: !!gasSource,
+        hasGas: gas.length > 0,
         devices: deviceData,
         costTotal
       };
@@ -1006,22 +864,17 @@ export class EnergySection {
 
     for (const devicePref of prefs.device_consumption) {
       const entityId = devicePref.stat_consumption;
-      const entityStats = stats[entityId];
-      if (!entityStats) continue;
-
-      const consumption = entityStats.reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-      if (consumption <= 0) continue;
+      const consumption = sumStats(stats, [entityId]);
+      if (consumption === null || consumption <= 0) continue;
 
       totalConsumption += consumption;
 
-      // Get friendly name
       const stateObj = hass.states[entityId];
       const name = stateObj?.attributes?.friendly_name || entityId.split('.').pop() || entityId;
 
       devices.push({ entityId, name, consumption, percentage: 0 });
     }
 
-    // Calculate percentages and sort
     if (totalConsumption > 0) {
       for (const device of devices) {
         device.percentage = (device.consumption / totalConsumption) * 100;
@@ -1053,7 +906,7 @@ export class EnergySection {
   private async fetchPeriodStatistics(hass: any, entityIds: string[], start: Date, end: Date, period: string): Promise<any> {
     if (!entityIds.length) return null;
 
-    const cacheKey = `${period}:${start.getTime()}:${entityIds.sort().join(',')}`;
+    const cacheKey = `${period}:${start.getTime()}:${[...entityIds].sort().join(',')}`;
     const cached = this.periodStatsCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < EnergySection.CACHE_TTL) {
       return cached.data;
@@ -1066,12 +919,31 @@ export class EnergySection {
         end_time: end.toISOString(),
         statistic_ids: entityIds,
         period: period,
-        types: ['change']
+        types: ['change'],
+        units: { energy: 'kWh' }
       });
       this.periodStatsCache.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch {
       return null;
+    }
+  }
+
+  // Energy-class statistics are requested in kWh above; other classes (gas volume) come back in the entity's unit.
+  private async fetchStatisticUnits(hass: any, ids: string[]): Promise<Record<string, string>> {
+    if (!ids.length) return {};
+    try {
+      const metadata: any[] = await hass.callWS({ type: 'recorder/get_statistics_metadata', statistic_ids: ids });
+      const units: Record<string, string> = {};
+      for (const m of metadata) {
+        const unit = m.unit_class === 'energy'
+          ? 'kWh'
+          : hass.states[m.statistic_id]?.attributes?.unit_of_measurement || m.statistics_unit_of_measurement;
+        if (unit) units[m.statistic_id] = unit;
+      }
+      return units;
+    } catch {
+      return {};
     }
   }
 
@@ -1091,56 +963,6 @@ export class EnergySection {
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
       return { start, end, statPeriod: 'day' };
     }
-  }
-
-  private getPreviousPeriodDates(period: Period): { start: Date; end: Date } {
-    const now = new Date();
-
-    if (period === 'day') {
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
-      return { start, end };
-    } else if (period === 'week') {
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-      const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
-      return { start, end };
-    } else {
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
-      const start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
-      return { start, end };
-    }
-  }
-
-  private getBarLabel(startTime: string, period: Period, lang: string): string {
-    const date = new Date(startTime);
-    if (period === 'day') {
-      return date.getHours().toString().padStart(2, '0');
-    } else if (period === 'week') {
-      return date.toLocaleDateString(lang, { weekday: 'short' });
-    } else {
-      return `${date.getDate()}`;
-    }
-  }
-
-  private generatePeriodLabels(period: Period, start: Date, lang: string): string[] {
-    const labels: string[] = [];
-    const now = new Date();
-
-    if (period === 'week') {
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
-        labels.push(d.toLocaleDateString(lang, { weekday: 'short' }));
-      }
-    } else {
-      // month
-      const days = Math.ceil((now.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
-      for (let i = 0; i < days; i++) {
-        const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
-        labels.push(`${d.getDate()}`);
-      }
-    }
-
-    return labels;
   }
 
   // ==================== ENTITY HELPERS ====================
@@ -1207,28 +1029,18 @@ export class EnergySection {
           : [];
 
       if (costIds.length) {
-        for (const id of costIds) {
-          const stats = currentStats?.[id];
-          if (stats) {
-            total += stats.reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-            found = true;
-          }
+        const cost = sumStats(currentStats, costIds);
+        if (cost !== null) {
+          total += cost;
+          found = true;
         }
         continue;
       }
 
       if (source.number_energy_price) {
-        let sourceConsumption = 0;
-        let hasConsumption = false;
-        for (const id of this.getSourceFromEntities(source)) {
-          const stats = currentStats?.[id];
-          if (stats) {
-            sourceConsumption += stats.reduce((sum: number, s: any) => sum + (s.change ?? 0), 0);
-            hasConsumption = true;
-          }
-        }
-        if (hasConsumption) {
-          total += sourceConsumption * source.number_energy_price;
+        const consumption = sumStats(currentStats, this.getSourceFromEntities(source));
+        if (consumption !== null) {
+          total += consumption * source.number_energy_price;
           found = true;
         }
       }
@@ -1237,56 +1049,22 @@ export class EnergySection {
     return found ? total : null;
   }
 
-  private findCurrentPower(hass: any, energyEntityIds: string[]): number | null {
-    let totalPower = 0;
+  private computeGasCost(gasSources: any[], includedIds: string[], stats: any): number | null {
+    let total = 0;
     let found = false;
-    const seenDevices = new Set<string>();
-
-    for (const energyEntityId of energyEntityIds) {
-      const entityRegistry = hass.entities?.[energyEntityId];
-      if (!entityRegistry?.device_id) continue;
-      // Multiple energy entities (e.g. day/night tariffs) can share one physical
-      // meter device; only count that device's power sensor once.
-      if (seenDevices.has(entityRegistry.device_id)) continue;
-
-      for (const [eid, reg] of Object.entries(hass.entities || {})) {
-        const r = reg as any;
-        if (r.device_id !== entityRegistry.device_id) continue;
-        if (eid === energyEntityId) continue;
-
-        const state = hass.states[eid];
-        if (!state) continue;
-        if (state.attributes?.device_class !== 'power') continue;
-        if (state.attributes?.state_class === undefined) continue;
-
-        const val = parseFloat(state.state);
-        if (!isNaN(val)) {
-          totalPower += val;
-          found = true;
-          seenDevices.add(entityRegistry.device_id);
-          break;
-        }
+    for (const source of gasSources) {
+      if (!includedIds.includes(source.stat_energy_from)) continue;
+      let cost = source.stat_cost ? sumStats(stats, [source.stat_cost]) : null;
+      if (cost === null && source.number_energy_price) {
+        const used = sumStats(stats, [source.stat_energy_from]);
+        if (used !== null) cost = used * source.number_energy_price;
+      }
+      if (cost !== null) {
+        total += cost;
+        found = true;
       }
     }
-
-    return found ? totalPower : null;
-  }
-
-  private findBatterySoc(hass: any, batteryEnergyEntity: string): number | null {
-    const entityRegistry = hass.entities?.[batteryEnergyEntity];
-    if (!entityRegistry?.device_id) return null;
-
-    for (const [eid, reg] of Object.entries(hass.entities || {})) {
-      const r = reg as any;
-      if (r.device_id !== entityRegistry.device_id) continue;
-      const state = hass.states[eid];
-      if (!state) continue;
-      if (state.attributes?.device_class === 'battery') {
-        const val = parseFloat(state.state);
-        if (!isNaN(val)) return val;
-      }
-    }
-    return null;
+    return found ? total : null;
   }
 
   // ==================== STATIC HELPERS ====================
@@ -1307,38 +1085,10 @@ export class EnergySection {
   static getTotalPower(hass: any): number | null {
     if (!hass?.states) return null;
 
-    // Strategy 1: Use cached grid entity IDs from energy prefs (same as full page)
-    if (EnergySection.cachedGridEntityIds && EnergySection.cachedGridEntityIds.length > 0 && hass.entities) {
-      let total = 0;
-      let found = false;
-      const seenDevices = new Set<string>();
-
-      for (const energyEntityId of EnergySection.cachedGridEntityIds) {
-        const entityRegistry = hass.entities[energyEntityId] as any;
-        if (!entityRegistry?.device_id) continue;
-        // Multiple grid flow entities (e.g. day/night tariffs) can share one
-        // physical meter device; only count that device's power sensor once.
-        if (seenDevices.has(entityRegistry.device_id)) continue;
-
-        for (const [eid, reg] of Object.entries(hass.entities || {})) {
-          const r = reg as any;
-          if (r.device_id !== entityRegistry.device_id) continue;
-          if (eid === energyEntityId) continue;
-          const state = hass.states[eid];
-          if (!state) continue;
-          if (state.attributes?.device_class !== 'power') continue;
-          if (state.attributes?.state_class === undefined) continue;
-          const val = parseFloat(state.state);
-          if (!isNaN(val)) {
-            total += val;
-            found = true;
-            seenDevices.add(entityRegistry.device_id);
-            break; // take first power sensor per grid device
-          }
-        }
-      }
-
-      if (found) return total;
+    // Strategy 1: grid entity IDs cached from the energy prefs
+    if (EnergySection.cachedGridEntityIds && hass.entities) {
+      const total = sumPower(hass, powerCandidates(hass, EnergySection.cachedGridEntityIds));
+      if (total !== null) return total;
     }
 
     // Strategy 2: Find power sensors on the same device as energy sensors
@@ -1350,7 +1100,7 @@ export class EnergySection {
         if (state?.attributes?.device_class !== 'energy') continue;
         if (state?.attributes?.state_class !== 'total_increasing') continue;
         const reg = hass.entities[entityId] as any;
-        if (reg?.entity_category || reg?.hidden_by || reg?.disabled_by) continue;
+        if (reg?.entity_category || reg?.hidden) continue;
         energyEntityIds.push(entityId);
       }
 
@@ -1393,7 +1143,7 @@ export class EnergySection {
       if (!state?.attributes?.state_class) continue;
       const reg = hass.entities?.[entityId] as any;
       if (reg?.entity_category === 'config' || reg?.entity_category === 'diagnostic') continue;
-      if (reg?.hidden_by || reg?.disabled_by) continue;
+      if (reg?.hidden) continue;
 
       const val = parseFloat(state.state);
       if (!isNaN(val) && val >= 0) {
@@ -2019,4 +1769,8 @@ export class EnergySection {
     `;
     shadowRoot.appendChild(style);
   }
+}
+
+function setText(el: HTMLElement, text: string): void {
+  if (el.textContent !== text) el.textContent = text;
 }

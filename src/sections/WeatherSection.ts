@@ -1,5 +1,6 @@
 import { CustomizationManager } from '../utils/CustomizationManager';
 import { localize } from '../utils/LocalizationService';
+import { splitForecast, type ForecastDay } from './weatherForecast';
 
 // Basmilius Meteocons animated SVG icon URLs (fill style)
 const METEOCONS_BASE = 'https://basmilius.github.io/weather-icons/production/fill/all';
@@ -35,13 +36,6 @@ const MDI_ICONS: Record<string, string> = {
   'exceptional': 'mdi:alert-circle-outline',
 };
 
-interface ForecastDay {
-  datetime: string;
-  temperature?: number;
-  templow?: number;
-  condition?: string;
-}
-
 // Temperature-to-color mapping for forecast bars (Apple Weather style)
 function tempToColor(temp: number): string {
   if (temp <= 0)  return '#4FC3F7'; // freezing - light blue
@@ -59,79 +53,111 @@ function isNightTime(hass: any): boolean {
   return sun?.state === 'below_horizon';
 }
 
+interface Pill {
+  pill: HTMLElement;
+  span: HTMLElement;
+}
+
+interface LiveCard {
+  entityId: string;
+  stateObj: any;
+  night: boolean;
+  condition: string;
+  iconUrl: string;
+  lang: string;
+  card: HTMLElement;
+  heroInfo: HTMLElement;
+  iconWrap: HTMLElement;
+  iconImg: HTMLImageElement;
+  tempText: Text;
+  unitSpan: HTMLElement;
+  condEl: HTMLElement;
+  details: HTMLElement;
+  humidity: Pill;
+  wind: Pill;
+  hiLoEl: HTMLElement | null;
+  forecastEl: HTMLElement | null;
+}
+
+function release(unsubscribe: () => unknown): void {
+  Promise.resolve().then(unsubscribe).catch(() => {});
+}
+
+function createPill(icon: string): Pill {
+  const pill = document.createElement('div');
+  pill.className = 'weather-detail-pill';
+  const iconEl = document.createElement('ha-icon');
+  iconEl.setAttribute('icon', icon);
+  const span = document.createElement('span');
+  pill.append(iconEl, span);
+  return { pill, span };
+}
+
+function setPill(p: Pill, text: string | null): void {
+  p.pill.style.display = text === null ? 'none' : '';
+  if (text !== null) p.span.textContent = text;
+}
+
 export class WeatherSection {
   private customizationManager: CustomizationManager;
-  private forecastCache: { entityId: string; data: ForecastDay[]; timestamp: number } | null = null;
-  private static readonly CACHE_TTL = 10 * 60 * 1000;
+  private live: LiveCard | null = null;
+  private forecast: ForecastDay[] = [];
+  private forecastEntityId: string | null = null;
+  private forecastRun = 0;
+  private renderRun = 0;
+  private unsubscribeForecast: (() => unknown) | null = null;
   private clockInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(customizationManager: CustomizationManager) {
     this.customizationManager = customizationManager;
   }
 
+  /** Stops the clock and the forecast subscription; safe to call repeatedly. */
+  destroy(): void {
+    this.renderRun++;
+    this.forecastRun++;
+    if (this.clockInterval) clearInterval(this.clockInterval);
+    this.clockInterval = null;
+    if (this.unsubscribeForecast) release(this.unsubscribeForecast);
+    this.unsubscribeForecast = null;
+    this.live = null;
+  }
+
   async render(container: HTMLElement, hass: any): Promise<void> {
+    this.destroy();
+    const run = this.renderRun;
     const weatherEntity = await this.customizationManager.getWeatherEntity();
-    if (!weatherEntity) return;
+    if (run !== this.renderRun || !weatherEntity) return;
 
     const stateObj = hass.states[weatherEntity];
     if (!stateObj || stateObj.state === 'unavailable' || stateObj.state === 'unknown') return;
 
     this.injectStyles(container);
 
-    // Clear any previous clock interval
-    if (this.clockInterval) {
-      clearInterval(this.clockInterval);
-      this.clockInterval = null;
-    }
-
-    const forecast = await this.fetchForecast(hass, weatherEntity, stateObj);
-    const todayForecast = forecast.length > 0 ? forecast[0] : null;
-    const attrs = stateObj.attributes;
-    const temp = Math.round(attrs.temperature ?? 0);
-    const humidity = attrs.humidity;
-    const windSpeed = attrs.wind_speed;
-    const windUnit = attrs.wind_speed_unit || 'km/h';
-    const tempUnit = hass.config?.unit_system?.temperature || '°C';
-    const condition = stateObj.state;
-    const condInfo = CONDITION_MAP[condition] || CONDITION_MAP['cloudy'];
-    const night = isNightTime(hass);
-    const conditionText = localize(`weather.conditions.${condition}`) || condition;
     const lang = hass.locale?.language || hass.language || 'en';
-    const timeFormat = hass.locale?.time_format ?? 'language';
 
-    // Pick icon (night variant if available and it's night)
-    const iconName = (night && condInfo.iconNight) ? condInfo.iconNight : condInfo.icon;
-    const iconUrl = `${METEOCONS_BASE}/${iconName}.svg`;
-
-    // Pick gradient (use night gradient for night conditions)
-    const gradient = (night && condition !== 'clear-night')
-      ? ['#0D1B2A', '#1B3A5C']
-      : condInfo.gradient;
-
-    // === OUTER CARD ===
     const card = document.createElement('div');
     card.className = 'apple-weather-card';
-    card.style.setProperty('--weather-tint', gradient[0]);
     card.addEventListener('click', () => {
       card.dispatchEvent(new CustomEvent('hass-more-info', {
         detail: { entityId: weatherEntity }, bubbles: true, composed: true,
       }));
     });
 
-    // === INNER LAYOUT: two-column on desktop, stacked on mobile ===
+    // Two-column on desktop, stacked on mobile
     const inner = document.createElement('div');
     inner.className = 'weather-card-inner';
 
-    // --- LEFT: Clock ---
     const clockSide = document.createElement('div');
     clockSide.className = 'weather-clock-side';
-
     const timeEl = document.createElement('div');
     timeEl.className = 'weather-clock-time';
-
     const dateEl = document.createElement('div');
     dateEl.className = 'weather-clock-date';
+    clockSide.append(timeEl, dateEl);
+    inner.appendChild(clockSide);
 
+    const timeFormat = hass.locale?.time_format ?? 'language';
     const updateClock = () => {
       const now = new Date();
       // HA time_format values: 'language', 'system', '12', '24'
@@ -140,29 +166,17 @@ export class WeatherSection {
       } else if (timeFormat === '24') {
         timeEl.textContent = now.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit', hour12: false });
       } else {
-        // 'language' or 'system' - let the locale decide
         timeEl.textContent = now.toLocaleTimeString(lang, { hour: 'numeric', minute: '2-digit' });
       }
-
-      dateEl.textContent = now.toLocaleDateString(lang, {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-      });
+      dateEl.textContent = now.toLocaleDateString(lang, { weekday: 'long', month: 'long', day: 'numeric' });
     };
-
     updateClock();
-    this.clockInterval = setInterval(updateClock, 15000);
+    // Pages rebuild their sections without calling destroy(), so a tick that finds the card gone stops everything.
+    this.clockInterval = setInterval(() => (card.isConnected ? updateClock() : this.destroy()), 15000);
 
-    clockSide.appendChild(timeEl);
-    clockSide.appendChild(dateEl);
-    inner.appendChild(clockSide);
-
-    // --- RIGHT: Weather content ---
     const weatherSide = document.createElement('div');
     weatherSide.className = 'weather-content-side';
 
-    // Hero row: Icon + Temp + Condition
     const hero = document.createElement('div');
     hero.className = 'weather-hero';
 
@@ -170,148 +184,196 @@ export class WeatherSection {
     iconWrap.className = 'weather-icon-wrap';
     const iconImg = document.createElement('img');
     iconImg.className = 'weather-icon-img';
-    iconImg.src = iconUrl;
-    iconImg.alt = conditionText;
     iconImg.loading = 'lazy';
     iconImg.onerror = () => {
-      iconWrap.innerHTML = `<ha-icon icon="${MDI_ICONS[condition] || 'mdi:weather-cloudy'}" class="weather-icon-fallback"></ha-icon>`;
+      const fallback = document.createElement('ha-icon');
+      fallback.setAttribute('icon', MDI_ICONS[this.live?.condition ?? ''] || 'mdi:weather-cloudy');
+      fallback.className = 'weather-icon-fallback';
+      iconWrap.replaceChildren(fallback);
     };
     iconWrap.appendChild(iconImg);
     hero.appendChild(iconWrap);
 
     const heroInfo = document.createElement('div');
     heroInfo.className = 'weather-hero-info';
-
     const tempEl = document.createElement('div');
     tempEl.className = 'weather-temp';
-    tempEl.textContent = `${temp}°`;
+    const tempText = document.createTextNode('');
     const unitSpan = document.createElement('span');
     unitSpan.className = 'weather-temp-unit';
-    unitSpan.textContent = tempUnit === '°F' ? 'F' : 'C';
-    tempEl.appendChild(unitSpan);
-    heroInfo.appendChild(tempEl);
-
+    tempEl.append(tempText, unitSpan);
     const condEl = document.createElement('div');
     condEl.className = 'weather-condition';
-    condEl.textContent = conditionText;
-    heroInfo.appendChild(condEl);
-
-    if (todayForecast) {
-      const high = todayForecast.temperature != null ? Math.round(todayForecast.temperature) : '--';
-      const low = todayForecast.templow != null ? Math.round(todayForecast.templow) : '--';
-      const hlEl = document.createElement('div');
-      hlEl.className = 'weather-hi-lo';
-      hlEl.textContent = `${localize('weather.high')}:${high}°  ${localize('weather.low')}:${low}°`;
-      heroInfo.appendChild(hlEl);
-    }
-
+    heroInfo.append(tempEl, condEl);
     hero.appendChild(heroInfo);
     weatherSide.appendChild(hero);
 
-    // Detail pills: Humidity + Wind
-    if (humidity != null || windSpeed != null) {
-      const details = document.createElement('div');
-      details.className = 'weather-details';
-
-      if (humidity != null) {
-        const hum = document.createElement('div');
-        hum.className = 'weather-detail-pill';
-        hum.innerHTML = `<ha-icon icon="mdi:water-percent"></ha-icon><span>${localize('weather.humidity')} ${humidity}%</span>`;
-        details.appendChild(hum);
-      }
-      if (windSpeed != null) {
-        const wind = document.createElement('div');
-        wind.className = 'weather-detail-pill';
-        wind.innerHTML = `<ha-icon icon="mdi:weather-windy"></ha-icon><span>${localize('weather.wind')} ${Math.round(windSpeed)} ${windUnit}</span>`;
-        details.appendChild(wind);
-      }
-
-      weatherSide.appendChild(details);
-    }
+    const details = document.createElement('div');
+    details.className = 'weather-details';
+    const humidity = createPill('mdi:water-percent');
+    const wind = createPill('mdi:weather-windy');
+    details.append(humidity.pill, wind.pill);
+    weatherSide.appendChild(details);
 
     inner.appendChild(weatherSide);
     card.appendChild(inner);
 
-    // === FORECAST (full-width below both columns) ===
-    const forecastDays = forecast.slice(1, 6);
-    if (forecastDays.length > 0) {
-      const forecastContainer = document.createElement('div');
-      forecastContainer.className = 'weather-forecast';
+    this.live = {
+      entityId: weatherEntity, stateObj: null, night: false, condition: '', iconUrl: '', lang,
+      card, heroInfo, iconWrap, iconImg, tempText, unitSpan, condEl, details, humidity, wind,
+      hiLoEl: null, forecastEl: null,
+    };
+    this.applyState(hass, stateObj);
+    container.appendChild(card);
 
-      let globalMin = Infinity;
-      let globalMax = -Infinity;
-      for (const day of forecastDays) {
-        if (day.templow != null) globalMin = Math.min(globalMin, day.templow);
-        if (day.temperature != null) globalMax = Math.max(globalMax, day.temperature);
-      }
-      if (todayForecast?.templow != null) globalMin = Math.min(globalMin, todayForecast.templow);
-      if (todayForecast?.temperature != null) globalMax = Math.max(globalMax, todayForecast.temperature);
-      const range = globalMax - globalMin || 1;
+    void this.loadForecast(hass, weatherEntity);
+  }
 
-      for (const day of forecastDays) {
-        const row = document.createElement('div');
-        row.className = 'forecast-row';
+  /** Refreshes live values from hass; a no-op unless the weather entity or day/night changed. */
+  update(hass: any): void {
+    const live = this.live;
+    if (!live) return;
+    const stateObj = hass?.states?.[live.entityId];
+    if (!stateObj || stateObj.state === 'unavailable' || stateObj.state === 'unknown') return;
+    if (stateObj === live.stateObj && isNightTime(hass) === live.night) return;
+    this.applyState(hass, stateObj);
+  }
 
-        const date = new Date(day.datetime);
-        const dayName = date.toLocaleDateString(lang, { weekday: 'short' });
-        const dayHigh = day.temperature != null ? Math.round(day.temperature) : null;
-        const dayLow = day.templow != null ? Math.round(day.templow) : null;
-        const dayIconName = this.getMeteoconName(day.condition || 'cloudy');
-        const dayIconUrl = `${METEOCONS_BASE}/${dayIconName}.svg`;
+  private applyState(hass: any, stateObj: any): void {
+    const live = this.live!;
+    const attrs = stateObj.attributes;
+    const condition = stateObj.state;
+    const night = isNightTime(hass);
+    const condInfo = CONDITION_MAP[condition] || CONDITION_MAP['cloudy'];
+    const conditionKey = `weather.conditions.${condition}`;
+    const localized = localize(conditionKey);
+    const conditionText = localized === conditionKey ? condition : localized;
 
-        const nameEl = document.createElement('span');
-        nameEl.className = 'forecast-day-name';
-        nameEl.textContent = dayName;
-        row.appendChild(nameEl);
+    live.stateObj = stateObj;
+    live.night = night;
+    live.condition = condition;
 
-        const smallIcon = document.createElement('img');
-        smallIcon.className = 'forecast-icon';
-        smallIcon.src = dayIconUrl;
-        smallIcon.alt = day.condition || '';
-        smallIcon.loading = 'lazy';
-        smallIcon.onerror = () => {
-          const fallback = document.createElement('ha-icon');
-          fallback.setAttribute('icon', MDI_ICONS[day.condition || ''] || 'mdi:weather-cloudy');
-          fallback.className = 'forecast-icon-fallback';
-          smallIcon.replaceWith(fallback);
-        };
-        row.appendChild(smallIcon);
+    const gradient = (night && condition !== 'clear-night') ? ['#0D1B2A', '#1B3A5C'] : condInfo.gradient;
+    live.card.style.setProperty('--weather-tint', gradient[0]);
 
-        const lowEl = document.createElement('span');
-        lowEl.className = 'forecast-temp-low';
-        lowEl.textContent = dayLow != null ? `${dayLow}°` : '--';
-        row.appendChild(lowEl);
+    live.tempText.data = attrs.temperature != null ? `${Math.round(attrs.temperature)}°` : '--';
+    live.unitSpan.textContent = (hass.config?.unit_system?.temperature || '°C') === '°F' ? 'F' : 'C';
+    live.condEl.textContent = conditionText;
 
-        const barWrap = document.createElement('div');
-        barWrap.className = 'forecast-bar-wrap';
-        const barBg = document.createElement('div');
-        barBg.className = 'forecast-bar-bg';
-        const barFill = document.createElement('div');
-        barFill.className = 'forecast-bar-fill';
-
-        if (dayLow != null && dayHigh != null) {
-          const left = ((dayLow - globalMin) / range) * 100;
-          const right = ((dayHigh - globalMin) / range) * 100;
-          barFill.style.left = `${left}%`;
-          barFill.style.width = `${right - left}%`;
-          barFill.style.background = `linear-gradient(to right, ${tempToColor(dayLow)}, ${tempToColor(dayHigh)})`;
-        }
-        barBg.appendChild(barFill);
-        barWrap.appendChild(barBg);
-        row.appendChild(barWrap);
-
-        const highEl = document.createElement('span');
-        highEl.className = 'forecast-temp-high';
-        highEl.textContent = dayHigh != null ? `${dayHigh}°` : '--';
-        row.appendChild(highEl);
-
-        forecastContainer.appendChild(row);
-      }
-
-      card.appendChild(forecastContainer);
+    const iconName = (night && condInfo.iconNight) ? condInfo.iconNight : condInfo.icon;
+    const iconUrl = `${METEOCONS_BASE}/${iconName}.svg`;
+    live.iconImg.alt = conditionText;
+    if (live.iconUrl !== iconUrl) {
+      live.iconUrl = iconUrl;
+      live.iconImg.src = iconUrl;
+      live.iconWrap.replaceChildren(live.iconImg);
     }
 
-    container.appendChild(card);
+    setPill(live.humidity, attrs.humidity != null ? `${localize('weather.humidity')} ${attrs.humidity}%` : null);
+    setPill(live.wind, attrs.wind_speed != null
+      ? `${localize('weather.wind')} ${Math.round(attrs.wind_speed)} ${attrs.wind_speed_unit || 'km/h'}`
+      : null);
+    live.details.style.display = attrs.humidity != null || attrs.wind_speed != null ? '' : 'none';
+  }
+
+  private applyForecast(): void {
+    const live = this.live;
+    if (!live) return;
+    const { today, upcoming } = splitForecast(this.forecast, new Date());
+
+    live.hiLoEl?.remove();
+    live.hiLoEl = null;
+    if (today) {
+      const high = today.temperature != null ? Math.round(today.temperature) : '--';
+      const low = today.templow != null ? Math.round(today.templow) : '--';
+      const hlEl = document.createElement('div');
+      hlEl.className = 'weather-hi-lo';
+      hlEl.textContent = `${localize('weather.high')}:${high}°  ${localize('weather.low')}:${low}°`;
+      live.heroInfo.appendChild(hlEl);
+      live.hiLoEl = hlEl;
+    }
+
+    live.forecastEl?.remove();
+    live.forecastEl = null;
+    if (upcoming.length > 0) {
+      live.forecastEl = this.buildForecast(upcoming, today, live.lang);
+      live.card.appendChild(live.forecastEl);
+    }
+  }
+
+  private buildForecast(forecastDays: ForecastDay[], today: ForecastDay | null, lang: string): HTMLElement {
+    const forecastContainer = document.createElement('div');
+    forecastContainer.className = 'weather-forecast';
+
+    let globalMin = Infinity;
+    let globalMax = -Infinity;
+    for (const day of [...forecastDays, ...(today ? [today] : [])]) {
+      if (day.templow != null) globalMin = Math.min(globalMin, day.templow);
+      if (day.temperature != null) globalMax = Math.max(globalMax, day.temperature);
+    }
+    const range = globalMax - globalMin || 1;
+
+    for (const day of forecastDays) {
+      const row = document.createElement('div');
+      row.className = 'forecast-row';
+
+      const date = new Date(day.datetime);
+      const dayName = date.toLocaleDateString(lang, { weekday: 'short' });
+      const dayHigh = day.temperature != null ? Math.round(day.temperature) : null;
+      const dayLow = day.templow != null ? Math.round(day.templow) : null;
+      const dayIconName = this.getMeteoconName(day.condition || 'cloudy');
+      const dayIconUrl = `${METEOCONS_BASE}/${dayIconName}.svg`;
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'forecast-day-name';
+      nameEl.textContent = dayName;
+      row.appendChild(nameEl);
+
+      const smallIcon = document.createElement('img');
+      smallIcon.className = 'forecast-icon';
+      smallIcon.src = dayIconUrl;
+      smallIcon.alt = day.condition || '';
+      smallIcon.loading = 'lazy';
+      smallIcon.onerror = () => {
+        const fallback = document.createElement('ha-icon');
+        fallback.setAttribute('icon', MDI_ICONS[day.condition || ''] || 'mdi:weather-cloudy');
+        fallback.className = 'forecast-icon-fallback';
+        smallIcon.replaceWith(fallback);
+      };
+      row.appendChild(smallIcon);
+
+      const lowEl = document.createElement('span');
+      lowEl.className = 'forecast-temp-low';
+      lowEl.textContent = dayLow != null ? `${dayLow}°` : '--';
+      row.appendChild(lowEl);
+
+      const barWrap = document.createElement('div');
+      barWrap.className = 'forecast-bar-wrap';
+      const barBg = document.createElement('div');
+      barBg.className = 'forecast-bar-bg';
+      const barFill = document.createElement('div');
+      barFill.className = 'forecast-bar-fill';
+
+      if (dayLow != null && dayHigh != null) {
+        const left = ((dayLow - globalMin) / range) * 100;
+        const right = ((dayHigh - globalMin) / range) * 100;
+        barFill.style.left = `${left}%`;
+        barFill.style.width = `${right - left}%`;
+        barFill.style.background = `linear-gradient(to right, ${tempToColor(dayLow)}, ${tempToColor(dayHigh)})`;
+      }
+      barBg.appendChild(barFill);
+      barWrap.appendChild(barBg);
+      row.appendChild(barWrap);
+
+      const highEl = document.createElement('span');
+      highEl.className = 'forecast-temp-high';
+      highEl.textContent = dayHigh != null ? `${dayHigh}°` : '--';
+      row.appendChild(highEl);
+
+      forecastContainer.appendChild(row);
+    }
+
+    return forecastContainer;
   }
 
   private getMeteoconName(condition: string): string {
@@ -319,37 +381,45 @@ export class WeatherSection {
     return info ? info.icon : 'overcast';
   }
 
-  private async fetchForecast(hass: any, entityId: string, stateObj: any): Promise<ForecastDay[]> {
-    if (
-      this.forecastCache &&
-      this.forecastCache.entityId === entityId &&
-      Date.now() - this.forecastCache.timestamp < WeatherSection.CACHE_TTL
-    ) {
-      return this.forecastCache.data;
+  private async loadForecast(hass: any, entityId: string): Promise<void> {
+    if (this.forecastEntityId !== entityId) {
+      this.forecast = [];
+      this.forecastEntityId = entityId;
     }
+    this.applyForecast();
+
+    const run = ++this.forecastRun;
+    const onForecast = (forecast: ForecastDay[] | null | undefined) => {
+      if (run !== this.forecastRun) return;
+      this.forecast = forecast ?? [];
+      this.applyForecast();
+    };
 
     try {
-      const result = await hass.callWS({
-        type: 'weather/get_forecasts',
-        entity_id: entityId,
-        forecast_type: 'daily',
-      });
-      const forecasts: ForecastDay[] = result?.[entityId]?.forecast || [];
-      if (forecasts.length > 0) {
-        this.forecastCache = { entityId, data: forecasts, timestamp: Date.now() };
-        return forecasts;
+      const unsubscribe = await hass.connection.subscribeMessage(
+        (event: any) => onForecast(event?.forecast),
+        { type: 'weather/subscribe_forecast', entity_id: entityId, forecast_type: 'daily' },
+      );
+      if (run !== this.forecastRun) {
+        release(unsubscribe);
+        return;
       }
+      this.unsubscribeForecast = unsubscribe;
     } catch {
-      // WS call not available
+      try {
+        const result = await hass.callWS({
+          type: 'call_service',
+          domain: 'weather',
+          service: 'get_forecasts',
+          service_data: { type: 'daily' },
+          target: { entity_id: entityId },
+          return_response: true,
+        });
+        onForecast(result?.response?.[entityId]?.forecast);
+      } catch {
+        // entity without daily forecast support
+      }
     }
-
-    const attrForecast = stateObj.attributes?.forecast;
-    if (Array.isArray(attrForecast) && attrForecast.length > 0) {
-      this.forecastCache = { entityId, data: attrForecast, timestamp: Date.now() };
-      return attrForecast;
-    }
-
-    return [];
   }
 
   private injectStyles(container: HTMLElement): void {
