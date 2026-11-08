@@ -38,7 +38,7 @@ type SummaryKey =
   | 'climate';
 
 // Device group pages (view path === group id)
-const PAGE = { security: 'security', water: 'water', lighting: 'lighting', media: 'media', climate: 'climate' } as const;
+const PAGE = { security: 'security', lighting: 'lighting', media: 'media', climate: 'climate' } as const;
 
 const SENSOR_KEYS = new Map<string, SummaryKey>([
   ['moisture', 'leak'],
@@ -130,15 +130,16 @@ export function buildSummary(entities: SummaryEntity[], ctx: SummaryContext): Su
   const items: SummaryItem[] = [];
   const add = (id: string, text: string, alert: boolean, target: SummaryTarget) => items.push({ id, text, alert, target });
 
-  const addAlert = (key: SummaryKey, page: string, localeKey: string, fallback: string) => {
+  // page is omitted when no group page lists these sensors (moisture resolves to OTHER); the first entity's more-info is the fallback
+  const addAlert = (key: SummaryKey, page: string | null, localeKey: string, fallback: string) => {
     const list = of(key);
     if (!list.length) return;
     const label = t(localeKey, fallback);
-    add(key, list.length === 1 ? label : `${label} (${count(list.length)})`, true, single(list) ?? { page });
+    add(key, list.length === 1 ? label : `${label} (${count(list.length)})`, true, single(list) ?? (page ? { page } : { entityId: list[0].entity_id }));
   };
 
   addAlert('alarm', PAGE.security, 'summary.alarm_triggered', 'Alarm triggered');
-  addAlert('leak', PAGE.water, 'summary.leak_detected', 'Leak detected');
+  addAlert('leak', null, 'summary.leak_detected', 'Leak detected');
   addAlert('smoke', PAGE.security, 'summary.smoke_detected', 'Smoke detected');
   addAlert('gas', PAGE.security, 'summary.gas_detected', 'Gas detected');
   addAlert('co', PAGE.security, 'summary.co_detected', 'Carbon monoxide detected');

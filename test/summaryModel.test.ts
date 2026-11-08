@@ -53,9 +53,15 @@ test('alerts come first and are flagged; unavailable lock is an alert', () => {
 });
 
 test('alert with several sources shows a count and navigates to a page', () => {
+  const [item] = buildSummary([ent('binary_sensor.a', 'on', { device_class: 'smoke' }), ent('binary_sensor.b', 'on', { device_class: 'smoke' })], ctx);
+  assert.equal(item.text, 'Smoke detected (2)');
+  assert.deepEqual(item.target, { page: 'security' });
+});
+
+test('several leaks open more-info of the first sensor because no page lists moisture sensors', () => {
   const [item] = buildSummary([ent('binary_sensor.a', 'on', { device_class: 'moisture' }), ent('binary_sensor.b', 'on', { device_class: 'moisture' })], ctx);
   assert.equal(item.text, 'Leak detected (2)');
-  assert.deepEqual(item.target, { page: 'water' });
+  assert.deepEqual(item.target, { entityId: 'binary_sensor.a' });
 });
 
 test('alarm armed, pending or off is not an alert', () => {
