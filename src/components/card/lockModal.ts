@@ -19,6 +19,13 @@ export function toggleLock(hass: any, entityId: string) {
   tryLockAction(hass, entityId, action);
 }
 
+// Cards live in shadow roots, where document.activeElement only reports the outermost host
+function deepActiveElement(): HTMLElement | null {
+  let active = document.activeElement;
+  while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+  return active as HTMLElement | null;
+}
+
 function showLockCodeModal(hass: any, entityId: string, action: LockAction, codeFormat: string) {
   const existingModal = document.querySelector('.lock-code-modal-overlay');
   if (existingModal) {
@@ -30,20 +37,21 @@ function showLockCodeModal(hass: any, entityId: string, action: LockAction, code
   const format = parseCodeFormat(codeFormat);
   const actionText = action === 'unlock' ? localize('lock_modal.unlock') : localize('lock_modal.lock');
   const cancelText = localize('lock_modal.cancel');
-  const actionColor = action === 'unlock' ? '#34c759' : '#ff9500';
+  const actionColor = action === 'unlock' ? 'var(--hg-color-green)' : 'var(--hg-color-orange)';
+  const previouslyFocused = deepActiveElement();
 
   const modalOverlay = document.createElement('div');
   modalOverlay.className = 'lock-code-modal-overlay';
   modalOverlay.innerHTML = `
     <style>${getLockModalStyles(actionColor)}</style>
-    <div class="lock-code-modal">
+    <div class="lock-code-modal hg-glass--thick" role="dialog" aria-modal="true" aria-labelledby="lock-code-title">
       <div class="lock-code-header">
         <div class="lock-code-icon">
           <svg viewBox="0 0 24 24">
             ${action === 'unlock' ? '<path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2m6-9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h9V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3H7a5 5 0 0 1 5-5 5 5 0 0 1 5 5v2h1z"/>' : '<path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2m6-9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h1V6a5 5 0 0 1 5-5 5 5 0 0 1 5 5v2h1m-6-5a3 3 0 0 0-3 3v2h6V6a3 3 0 0 0-3-3z"/>'}
           </svg>
         </div>
-        <div class="lock-code-title">${escapeHtml(friendlyName)}</div>
+        <div class="lock-code-title" id="lock-code-title">${escapeHtml(friendlyName)}</div>
         <div class="lock-code-subtitle">${escapeHtml(actionText)}</div>
       </div>
       ${
@@ -95,7 +103,7 @@ function showLockCodeModal(hass: any, entityId: string, action: LockAction, code
     confirmBtn.disabled = code.length === 0;
   };
   updateDisplay();
-  input?.focus();
+  (input ?? modalOverlay.querySelector<HTMLElement>('.lock-code-key'))?.focus();
   input?.addEventListener('input', () => {
     code = input.value;
     errorDiv.textContent = '';
@@ -103,8 +111,9 @@ function showLockCodeModal(hass: any, entityId: string, action: LockAction, code
   });
 
   const closeModal = () => {
-    modalOverlay.style.animation = 'lockModalFadeIn 0.2s ease-out reverse';
+    modalOverlay.style.animation = 'lockModalFadeIn var(--hg-dur) var(--hg-ease-standard) reverse';
     setTimeout(() => modalOverlay.remove(), 150);
+    previouslyFocused?.focus?.();
   };
 
   modalOverlay.querySelectorAll('[data-key]').forEach((key) => {
@@ -172,7 +181,7 @@ function showLockCodeModal(hass: any, entityId: string, action: LockAction, code
     }
     if (e.key === 'Escape') {
       closeModal();
-    } else if (e.key === 'Enter' && code.length > 0) {
+    } else if (e.key === 'Enter' && code.length > 0 && !(e.target as Element | null)?.closest?.('button')) {
       handleConfirm();
     } else if (!format.numeric) {
       // the text input handles its own typing

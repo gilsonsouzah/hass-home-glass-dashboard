@@ -25,6 +25,7 @@ export class HomeCard extends HTMLElement {
   private layoutKey?: string;
   private boundCardClick?: (e: Event) => void;
   private boundIconClick?: (e: Event) => void;
+  private boundCardKeydown?: (e: KeyboardEvent) => void;
   private _hasRendered: boolean = false;
   private readonly camera = new CameraController(
     this,
@@ -58,6 +59,9 @@ export class HomeCard extends HTMLElement {
       if (card && this.boundCardClick) {
         card.removeEventListener('click', this.boundCardClick);
       }
+      if (card && this.boundCardKeydown) {
+        card.removeEventListener('keydown', this.boundCardKeydown as EventListener);
+      }
       if (icon && this.boundIconClick) {
         icon.removeEventListener('click', this.boundIconClick);
       }
@@ -65,6 +69,7 @@ export class HomeCard extends HTMLElement {
 
     this.boundCardClick = undefined;
     this.boundIconClick = undefined;
+    this.boundCardKeydown = undefined;
   }
 
   static getStubConfig() {
@@ -231,9 +236,9 @@ export class HomeCard extends HTMLElement {
 
     this.shadowRoot!.innerHTML = `
       <style>
-        ${getCardStyles(entityData)}
+        ${getCardStyles()}
       </style>
-      <div class="home-glass-card ${isEditMode ? 'edit-mode' : ''} ${this.domain === 'camera' && this.cameraView === 'snapshot' ? 'camera-card' : ''} ${RTLHelper.isRTL() ? 'rtl' : 'ltr'}">
+      <div class="home-glass-card hg-glass hg-pressable ${isEditMode ? 'edit-mode' : ''} ${DashboardConfig.isUnavailable(state) ? 'unavailable' : ''} ${this.domain === 'camera' && this.cameraView === 'snapshot' ? 'camera-card' : ''} ${RTLHelper.isRTL() ? 'rtl' : 'ltr'}" role="button" tabindex="0"${this.domain === 'camera' ? ` aria-label="${escapeHtml(name)}"` : ''}>
         <div class="card-info">
           ${iconElement}
           ${
@@ -292,7 +297,9 @@ export class HomeCard extends HTMLElement {
     this.style.setProperty('--card-text-color', entityData.textColor);
     this.style.setProperty(
       '--card-state-color',
-      entityData.isActive ? 'rgba(29, 29, 31, 0.6)' : 'rgba(255, 255, 255, 0.6)'
+      entityData.isActive
+        ? 'color-mix(in srgb, var(--hg-label-on-active) 60%, transparent)'
+        : 'var(--hg-label-secondary)'
     );
   }
 
@@ -308,6 +315,9 @@ export class HomeCard extends HTMLElement {
     const entityData = DashboardConfig.getEntityData(state, this.domain!, this.isTall, forceWhiteIcons, this._hass);
 
     this.updateCSSVariables(entityData);
+    this.shadowRoot
+      .querySelector('.home-glass-card')
+      ?.classList.toggle('unavailable', DashboardConfig.isUnavailable(state));
 
     const nameEl = this.shadowRoot.querySelector('.entity-name');
     if (nameEl) {
@@ -355,8 +365,10 @@ export class HomeCard extends HTMLElement {
 
     this.boundCardClick = this.handleCardClick.bind(this);
     this.boundIconClick = this.handleIconClick.bind(this);
+    this.boundCardKeydown = this.handleCardKeydown.bind(this);
 
     card?.addEventListener('click', this.boundCardClick);
+    card?.addEventListener('keydown', this.boundCardKeydown as EventListener);
     icon?.addEventListener('click', this.boundIconClick);
   }
 
@@ -378,10 +390,10 @@ export class HomeCard extends HTMLElement {
   private thermostatControlsHtml(): string {
     return `
           <div class="thermostat-controls">
-            <button class="chevron-btn chevron-up" aria-label="Increase temperature">
+            <button type="button" class="chevron-btn chevron-up" aria-label="Increase temperature">
               <ha-icon icon="mdi:chevron-up"></ha-icon>
             </button>
-            <button class="chevron-btn chevron-down" aria-label="Decrease temperature">
+            <button type="button" class="chevron-btn chevron-down" aria-label="Decrease temperature">
               <ha-icon icon="mdi:chevron-down"></ha-icon>
             </button>
           </div>
@@ -460,9 +472,10 @@ export class HomeCard extends HTMLElement {
     this.shadowRoot!.innerHTML = `
       <style>
         .error-card {
-          background: rgba(255, 59, 48, 0.1);
-          border: 1px solid rgba(255, 59, 48, 0.3);
-          border-radius: var(--apple-card-radius, 25px);
+          background: color-mix(in srgb, var(--hg-color-red) 10%, transparent);
+          border: 1px solid color-mix(in srgb, var(--hg-color-red) 30%, transparent);
+          border-radius: var(--hg-radius-tile);
+          font-family: var(--hg-font);
           padding: 16px;
           display: flex;
           flex-direction: column;
@@ -472,14 +485,14 @@ export class HomeCard extends HTMLElement {
           box-sizing: border-box;
         }
         .error-text {
-          color: #ff3b30;
-          font-size: 14px;
-          font-weight: 500;
+          color: var(--hg-color-red);
+          font-size: var(--hg-text-subhead-size);
+          font-weight: var(--hg-text-headline-weight);
           margin-bottom: 4px;
         }
         .entity-text {
-          color: rgba(255, 59, 48, 0.6);
-          font-size: 12px;
+          color: color-mix(in srgb, var(--hg-color-red) 60%, transparent);
+          font-size: var(--hg-text-caption1-size);
         }
       </style>
       <div class="error-card">
@@ -514,6 +527,14 @@ export class HomeCard extends HTMLElement {
     }
 
     runCardAction(this.actionContext());
+  }
+
+  // Only the tile itself: Enter/Space on a chevron button already produce a native click
+  private handleCardKeydown(event: KeyboardEvent) {
+    if (event.target !== event.currentTarget) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    this.handleCardClick(event);
   }
 
   private handleIconClick(event: Event) {
