@@ -89,3 +89,14 @@ test('averageSoc averages across batteries', () => {
   const groups = [['sensor.b1'], ['sensor.b2']];
   assert.equal(averageSoc(hass, groups), 70);
 });
+
+test('getStartDateForPeriod: local-midnight windows ending now', async () => {
+  const { getStartDateForPeriod } = await import('../src/sections/energyCalc.ts');
+  const now = new Date(2026, 10, 8, 15, 30);
+  const day = getStartDateForPeriod('day', now);
+  assert.deepEqual([day.start, day.statPeriod], [new Date(2026, 10, 8), 'hour']);
+  assert.equal(day.end, now);
+  assert.deepEqual(getStartDateForPeriod('week', now).start, new Date(2026, 10, 2));
+  const month = getStartDateForPeriod('month', now);
+  assert.deepEqual([month.start, month.statPeriod], [new Date(2026, 9, 10), 'day']);
+});

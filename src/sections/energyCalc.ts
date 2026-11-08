@@ -157,3 +157,10 @@ export function averageSoc(hass: any, groups: string[][]): number | null {
   }
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
+
+/** Local-midnight based window ending now: today, the last 7 days, or the last 30 days. */
+export function getStartDateForPeriod(period: Period, now: Date = new Date()): { start: Date; end: Date; statPeriod: string } {
+  const daysBack = period === 'day' ? 0 : period === 'week' ? 6 : 29;
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysBack);
+  return { start, end: now, statPeriod: period === 'day' ? 'hour' : 'day' };
+}
