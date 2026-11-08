@@ -60,7 +60,7 @@ export class StatusSection {
     if (!section) return;
 
     const visibleItems = this.statusItems.filter((item) => item.isVisible);
-    section.hidden = visibleItems.length === 0;
+    section.style.display = visibleItems.length === 0 ? 'none' : '';
     section.innerHTML = visibleItems.length > 0 ? this.generateHTML(visibleItems) : '';
     this.attachEventListeners(section);
   }
