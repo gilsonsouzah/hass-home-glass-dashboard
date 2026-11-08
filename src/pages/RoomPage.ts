@@ -9,6 +9,9 @@ import { Entity } from '../types/types';
 import { localize } from '../utils/LocalizationService';
 import { escapeHtml } from '../utils/html';
 import { resetPage } from './pageChrome';
+import { createCardWrapper } from './cardGrid';
+import { sortBySavedOrder } from './homeOrdering';
+import { isSwitchShown } from './entityFilter';
 
 const ROOM_GROUPS = [
   DeviceGroup.LIGHTING,
@@ -29,10 +32,6 @@ export class RoomPage {
   private statusSection?: StatusSection;
   private _hass?: any;
   private _areaId?: string;
-
-  constructor() {
-    // Regular class constructor
-  }
 
   set hass(hass: any) {
     this._hass = hass;
@@ -100,20 +99,8 @@ export class RoomPage {
 
         const domain = entity.entity_id.split('.')[0];
 
-        // Additional filtering for switches based on showSwitches setting and includedSwitches
         if (domain === 'switch') {
-          const entityState = hass.states[entity.entity_id];
-          
-          // If showSwitches is true, use the standard device group logic
-          if (showSwitches) {
-            const entityGroup = DashboardConfig.getDeviceGroup(domain, entity.entity_id, entityState?.attributes, showSwitches);
-            return entityGroup !== undefined;
-          } else {
-            // If showSwitches is false, only show switches that are in includedSwitches or are outlets
-            const isOutlet = DashboardConfig.isOutlet(entity.entity_id, entityState?.attributes);
-            const isIncluded = includedSwitches.includes(entity.entity_id);
-            return isOutlet || isIncluded;
-          }
+          return isSwitchShown(DashboardConfig, entity.entity_id, hass.states[entity.entity_id]?.attributes, showSwitches, includedSwitches);
         }
         
         return true;
@@ -130,20 +117,8 @@ export class RoomPage {
 
         const domain = entity.entity_id.split('.')[0];
 
-        // Apply same switch filtering logic for status section
         if (domain === 'switch') {
-          const entityState = hass.states[entity.entity_id];
-          
-          // If showSwitches is true, use the standard device group logic
-          if (showSwitches) {
-            const entityGroup = DashboardConfig.getDeviceGroup(domain, entity.entity_id, entityState?.attributes, showSwitches);
-            return entityGroup !== undefined;
-          } else {
-            // If showSwitches is false, only show switches that are in includedSwitches or are outlets
-            const isOutlet = DashboardConfig.isOutlet(entity.entity_id, entityState?.attributes);
-            const isIncluded = includedSwitches.includes(entity.entity_id);
-            return isOutlet || isIncluded;
-          }
+          return isSwitchShown(DashboardConfig, entity.entity_id, hass.states[entity.entity_id]?.attributes, showSwitches, includedSwitches);
         }
         
         return true;
@@ -232,17 +207,7 @@ export class RoomPage {
           const groupOrder = pageCustomizations[groupOrderKey];
           
           if (groupEntities.length > 0 && groupOrder && Array.isArray(groupOrder)) {
-            const sortedEntities = [...groupEntities].sort((a, b) => {
-              const aOrder = groupOrder.indexOf(a.entity_id);
-              const bOrder = groupOrder.indexOf(b.entity_id);
-              
-              if (aOrder !== -1 && bOrder !== -1) {
-                return aOrder - bOrder;
-              }
-              if (aOrder !== -1) return -1;
-              if (bOrder !== -1) return 1;
-              return 0;
-            });
+            const sortedEntities = sortBySavedOrder(groupEntities, groupOrder, (entity) => entity.entity_id);
             entitiesByGroup[group] = sortedEntities;
           }
           
@@ -379,52 +344,28 @@ export class RoomPage {
     hass: any,
     onTallToggle?: (entityId: string, areaId: string) => void | Promise<void | boolean>
   ): Promise<void> {
-    // Create wrapper div for the card
-    const wrapper = document.createElement('div');
-    wrapper.className = 'entity-card-wrapper';
-    wrapper.dataset.entityId = cardConfig.entity;
-    wrapper.dataset.areaId = this._areaId || 'unknown';
-    
-    // Apply tall class if needed
-    if (cardConfig.is_tall) {
-      wrapper.classList.add('tall');
-    }
+    const areaId = this._areaId || 'unknown';
+    const { wrapper, controls } = createCardWrapper(cardConfig, areaId, hass);
 
-    // Create the card element
-    const cardElement = document.createElement('home-glass-card') as any;
-    cardElement.setConfig(cardConfig);
-    cardElement.hass = hass;
-
-    // Add edit mode controls
-    const controls = document.createElement('div');
-    controls.className = 'entity-controls';
-    
-    // Tall toggle button
     const tallButton = document.createElement('button');
     tallButton.className = 'entity-control-btn tall-toggle';
     tallButton.innerHTML = `<ha-icon icon="mdi:${cardConfig.is_tall ? 'arrow-collapse' : 'arrow-expand'}"></ha-icon>`;
     tallButton.title = cardConfig.is_tall ? localize('edit.make_normal_size') : localize('edit.make_tall');
     tallButton.classList.toggle('active', cardConfig.is_tall);
-    
+
     tallButton.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      
+
       if (onTallToggle) {
-        // Use main area ID for tall card toggle, not the entity's area_id
-        await onTallToggle(cardConfig.entity, this._areaId || 'unknown');
-        
-        // Get the actual state from customization manager to ensure consistency
-        const actualTallState = this.cardManager?.shouldCardBeTall(cardConfig.entity, this._areaId || 'unknown', 'room') || false;
-        
-        // Update visual state with the actual saved state
+        await onTallToggle(cardConfig.entity, areaId);
+        // Re-read the saved state so the UI matches what was persisted.
+        const actualTallState = this.cardManager?.shouldCardBeTall(cardConfig.entity, areaId, 'room') || false;
         this.updateTallCardVisual(wrapper, tallButton, cardConfig, actualTallState);
       }
     });
 
     controls.appendChild(tallButton);
-    wrapper.appendChild(controls);
-    wrapper.appendChild(cardElement);
     gridContainer.appendChild(wrapper);
   }
 

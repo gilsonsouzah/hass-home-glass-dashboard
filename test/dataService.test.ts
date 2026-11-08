@@ -24,10 +24,11 @@ test('resolveAreaId prefers the entity area, then the device area', () => {
   assert.equal(DataService.resolveAreaId({ entity_id: 'a.b', device_id: 'nope' }, devices), undefined);
 });
 
-test('isVisibleInRegistry reads hass.entities', () => {
-  const hass = { entities: { 'a.h': { hidden_by: 'user' }, 'a.d': { disabled_by: 'user' }, 'a.ok': {} } };
+test('isVisibleInRegistry reads the display-registry hidden flag', () => {
+  const hass = { entities: { 'a.h': { hidden: true }, 'a.ok': { hidden: false }, 'a.legacy': { hidden_by: 'user' } } };
   assert.equal(DataService.isVisibleInRegistry(hass, 'a.h'), false);
-  assert.equal(DataService.isVisibleInRegistry(hass, 'a.d'), false);
   assert.equal(DataService.isVisibleInRegistry(hass, 'a.ok'), true);
+  assert.equal(DataService.isVisibleInRegistry(hass, 'a.legacy'), true);
   assert.equal(DataService.isVisibleInRegistry(hass, 'a.unknown'), true);
+  assert.equal(DataService.isVisibleInRegistry({}, 'a.unknown'), true);
 });

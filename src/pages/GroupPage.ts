@@ -9,6 +9,7 @@ import { WeatherSection } from '../sections/WeatherSection';
 import { EnergySection } from '../sections/EnergySection';
 import { Entity, Device, Area, HassUpdatable } from '../types/types';
 import { resetPage } from './pageChrome';
+import { groupOfEntity } from './entityFilter';
 import { applyHomeOrdering } from './homeOrdering';
 import { orderSections } from '../utils/sectionOrder';
 
@@ -22,10 +23,6 @@ export class GroupPage {
   private energySection?: EnergySection;
   private _hass?: any;
   private _group?: DeviceGroup;
-
-  constructor() {
-    // Regular class constructor
-  }
 
   set hass(hass: any) {
     this._hass = hass;
@@ -55,6 +52,7 @@ export class GroupPage {
 
   private initializeSections() {
     if (this.customizationManager) {
+      this.weatherSection?.destroy?.();
       this.scenesSection = new ScenesSection(this.customizationManager);
       this.camerasSection = new CamerasSection(this.customizationManager);
       this.areaSection = new AreaSection(this.customizationManager);
@@ -143,43 +141,8 @@ export class GroupPage {
 
       for (const [areaId, entities] of Object.entries(entitiesByArea)) {
         const groupEntities = entities.filter((entity) => {
-          const domain = entity.entity_id.split('.')[0];
           const entityState = this.hass?.states[entity.entity_id];
-
-          // Special handling for switches
-          if (domain === 'switch') {
-            if (showSwitches) {
-              const entityGroup = DashboardConfig.getDeviceGroup(
-                domain,
-                entity.entity_id,
-                entityState?.attributes,
-                showSwitches
-              );
-              return entityGroup === group;
-            } else {
-              // If showSwitches is false, only include outlets or included switches
-              const isOutlet = DashboardConfig.isOutlet(entity.entity_id, entityState?.attributes);
-              const isIncluded = includedSwitches.includes(entity.entity_id);
-              if (isOutlet || isIncluded) {
-                const entityGroup = DashboardConfig.getDeviceGroup(
-                  domain,
-                  entity.entity_id,
-                  entityState?.attributes,
-                  true
-                ); // Force true to get proper group
-                return entityGroup === group;
-              }
-              return false;
-            }
-          } else {
-            const entityGroup = DashboardConfig.getDeviceGroup(
-              domain,
-              entity.entity_id,
-              entityState?.attributes,
-              showSwitches
-            );
-            return entityGroup === group;
-          }
+          return groupOfEntity(DashboardConfig, entity.entity_id, entityState?.attributes, showSwitches, includedSwitches) === group;
         });
 
         if (groupEntities.length > 0) {
@@ -244,40 +207,7 @@ export class GroupPage {
           return deviceHasGroupEntities;
         }
 
-        // Special handling for switches
-        if (domain === 'switch') {
-          if (showSwitches) {
-            const entityGroup = DashboardConfig.getDeviceGroup(
-              domain,
-              entity.entity_id,
-              entityState?.attributes,
-              showSwitches
-            );
-            return entityGroup === group;
-          } else {
-            // If showSwitches is false, only include outlets or included switches
-            const isOutlet = DashboardConfig.isOutlet(entity.entity_id, entityState?.attributes);
-            const isIncluded = includedSwitches.includes(entity.entity_id);
-            if (isOutlet || isIncluded) {
-              const entityGroup = DashboardConfig.getDeviceGroup(
-                domain,
-                entity.entity_id,
-                entityState?.attributes,
-                true
-              ); // Force true to get proper group
-              return entityGroup === group;
-            }
-            return false;
-          }
-        } else {
-          const entityGroup = DashboardConfig.getDeviceGroup(
-            domain,
-            entity.entity_id,
-            entityState?.attributes,
-            showSwitches
-          );
-          return entityGroup === group;
-        }
+        return groupOfEntity(DashboardConfig, entity.entity_id, entityState?.attributes, showSwitches, includedSwitches) === group;
       });
 
       // Add status section after chips

@@ -9,6 +9,7 @@ import { WeatherSection } from '../sections/WeatherSection';
 import { EnergySection } from '../sections/EnergySection';
 import { Entity, Area, HassUpdatable } from '../types/types';
 import { resetPage } from './pageChrome';
+import { isSwitchShown } from './entityFilter';
 import { applyHomeOrdering } from './homeOrdering';
 import { orderSections } from '../utils/sectionOrder';
 
@@ -21,10 +22,6 @@ export class HomePage {
   private weatherSection?: WeatherSection;
   private energySection?: EnergySection;
   private _hass?: any;
-
-  constructor() {
-    // Regular class constructor
-  }
 
   set hass(hass: any) {
     this._hass = hass;
@@ -43,6 +40,7 @@ export class HomePage {
 
   private initializeSections() {
     if (this.customizationManager) {
+      this.weatherSection?.destroy?.();
       this.scenesSection = new ScenesSection(this.customizationManager);
       this.camerasSection = new CamerasSection(this.customizationManager);
       this.areaSection = new AreaSection(this.customizationManager);
@@ -82,25 +80,8 @@ export class HomePage {
 
         const domain = entity.entity_id.split('.')[0];
 
-        // Additional filtering for switches based on showSwitches setting and includedSwitches
         if (domain === 'switch') {
-          const entityState = hass.states[entity.entity_id];
-
-          // If showSwitches is true, use the standard device group logic
-          if (showSwitches) {
-            const entityGroup = DashboardConfig.getDeviceGroup(
-              domain,
-              entity.entity_id,
-              entityState?.attributes,
-              showSwitches
-            );
-            return entityGroup !== undefined;
-          } else {
-            // If showSwitches is false, only show switches that are in includedSwitches or are outlets
-            const isOutlet = DashboardConfig.isOutlet(entity.entity_id, entityState?.attributes);
-            const isIncluded = includedSwitches.includes(entity.entity_id);
-            return isOutlet || isIncluded;
-          }
+          return isSwitchShown(DashboardConfig, entity.entity_id, hass.states[entity.entity_id]?.attributes, showSwitches, includedSwitches);
         }
 
         return true;
@@ -175,14 +156,14 @@ export class HomePage {
     const hiddenSections = this.customizationManager.getHiddenSections();
 
     // Create a map of all available sections (closures accept optional target container)
-    const availableSections = new Map<string, (target?: HTMLElement) => Promise<void>>();
+    const availableSections = new Map<string, (target: HTMLElement) => Promise<void>>();
 
     // Add weather section if a weather entity is configured and exists
     const weatherEntity = await this.customizationManager?.getWeatherEntity();
     const hasWeather = !!(weatherEntity && hass.states[weatherEntity]);
     if (hasWeather) {
-      availableSections.set('weather_section', async (target?: HTMLElement) => {
-        await this.weatherSection!.render(target || container, hass);
+      availableSections.set('weather_section', async (target: HTMLElement) => {
+        await this.weatherSection!.render(target, hass);
       });
     }
 
@@ -190,38 +171,38 @@ export class HomePage {
     const showEnergy = await this.customizationManager?.getShowEnergy();
     const hasEnergy = !!(showEnergy && EnergySection.hasEnergySensors(hass));
     if (hasEnergy) {
-      availableSections.set('energy_section', async (target?: HTMLElement) => {
-        await this.energySection!.render(target || container, hass);
+      availableSections.set('energy_section', async (target: HTMLElement) => {
+        await this.energySection!.render(target, hass);
       });
     }
 
     // Add favorites section if there are favorites defined
     const hasFavorites = await this.customizationManager?.hasFavoriteAccessories();
     if (hasFavorites) {
-      availableSections.set('favorites_section', async (target?: HTMLElement) => {
-        await this.favoritesSection!.render(target || container, allEntities, hass, onTallToggle);
+      availableSections.set('favorites_section', async (target: HTMLElement) => {
+        await this.favoritesSection!.render(target, allEntities, hass, onTallToggle);
       });
     }
 
     // Add scenes section if there are any scenes or scripts
     if (scenesEntities.length > 0) {
-      availableSections.set('scenes_section', async (target?: HTMLElement) => {
-        await this.scenesSection!.render(target || container, scenesEntities, hass, onTallToggle);
+      availableSections.set('scenes_section', async (target: HTMLElement) => {
+        await this.scenesSection!.render(target, scenesEntities, hass, onTallToggle);
       });
     }
 
     // Add cameras section if there are any cameras
     if (camerasEntities.length > 0) {
-      availableSections.set('cameras_section', async (target?: HTMLElement) => {
-        await this.camerasSection!.render(target || container, camerasEntities, hass, onTallToggle);
+      availableSections.set('cameras_section', async (target: HTMLElement) => {
+        await this.camerasSection!.render(target, camerasEntities, hass, onTallToggle);
       });
     }
 
     // Add area sections
     for (const areaId of Object.keys(entitiesByArea)) {
       if (entitiesByArea[areaId].length > 0) {
-        availableSections.set(areaId, async (target?: HTMLElement) => {
-          await this.areaSection!.renderSingleArea(target || container, areaId, entitiesByArea[areaId], hass, onTallToggle, 'home');
+        availableSections.set(areaId, async (target: HTMLElement) => {
+          await this.areaSection!.renderSingleArea(target, areaId, entitiesByArea[areaId], hass, onTallToggle, 'home');
         });
       }
     }
@@ -234,42 +215,44 @@ export class HomePage {
       hass.locale?.language || hass.language
     );
 
-    // Render sections in order, pairing adjacent weather+energy in a side-by-side row
-    const rendered = new Set<string>();
-    for (let i = 0; i < orderedSectionIds.length; i++) {
-      const sectionId = orderedSectionIds[i];
-      if (rendered.has(sectionId) || hiddenSections.includes(sectionId) || !availableSections.has(sectionId)) continue;
+    const visibleIds = orderedSectionIds.filter((id) => !hiddenSections.includes(id) && availableSections.has(id));
+    const pairWeatherEnergy =
+      hasWeather && hasEnergy && visibleIds.some((id, i) => isWeatherEnergyPair(id, visibleIds[i + 1]));
 
-      // Check if weather and energy are adjacent — pair them side-by-side
-      if ((sectionId === 'weather_section' || sectionId === 'energy_section') && hasWeather && hasEnergy) {
-        const otherSection = sectionId === 'weather_section' ? 'energy_section' : 'weather_section';
-        if (!rendered.has(otherSection) && !hiddenSections.includes(otherSection) && availableSections.has(otherSection)) {
-          // Find the next visible section after current
-          let nextVisible: string | null = null;
-          for (let j = i + 1; j < orderedSectionIds.length; j++) {
-            const nextId = orderedSectionIds[j];
-            if (!rendered.has(nextId) && !hiddenSections.includes(nextId) && availableSections.has(nextId)) {
-              nextVisible = nextId;
-              break;
+    const slots: { slot: HTMLElement; render: Promise<void> }[] = [];
+    const renderIntoSlot = (sectionId: string, parent: HTMLElement) => {
+      const slot = createSlot(parent);
+      slots.push({ slot, render: availableSections.get(sectionId)!(slot) });
+    };
+
+    for (let i = 0; i < visibleIds.length; i++) {
+      if (pairWeatherEnergy && isWeatherEnergyPair(visibleIds[i], visibleIds[i + 1])) {
+        const row = document.createElement('div');
+        row.className = 'weather-energy-row';
+        container.appendChild(row);
+        renderIntoSlot(visibleIds[i], row);
+        renderIntoSlot(visibleIds[i + 1], row);
+        i++;
+      } else {
+        renderIntoSlot(visibleIds[i], container);
       }
     }
 
-          if (nextVisible === otherSection) {
-            // Adjacent! Wrap in a side-by-side row
-            const wrapper = document.createElement('div');
-            wrapper.className = 'weather-energy-row';
-            container.appendChild(wrapper);
-            await availableSections.get(sectionId)!(wrapper);
-            await availableSections.get(otherSection)!(wrapper);
-            rendered.add(sectionId);
-            rendered.add(otherSection);
-            continue;
-          }
-        }
-      }
-
-      await availableSections.get(sectionId)!();
-      rendered.add(sectionId);
-    }
+    const results = await Promise.allSettled(slots.map(({ render }) => render));
+    slots.forEach(({ slot }) => slot.replaceWith(...Array.from(slot.childNodes)));
+    const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failed) throw failed.reason;
   }
+}
+
+function isWeatherEnergyPair(id: string, next?: string): boolean {
+  return (id === 'weather_section' && next === 'energy_section') || (id === 'energy_section' && next === 'weather_section');
+}
+
+/** Reserves a spot in `parent` so sections can render concurrently and still land in order. */
+function createSlot(parent: HTMLElement): HTMLElement {
+  const slot = document.createElement('div');
+  slot.style.display = 'contents';
+  parent.appendChild(slot);
+  return slot;
 }
