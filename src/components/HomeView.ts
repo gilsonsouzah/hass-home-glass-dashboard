@@ -15,12 +15,11 @@ import { ScenesPage } from '../pages/ScenesPage';
 import { CamerasPage } from '../pages/CamerasPage';
 import { DeviceGroup } from '../config/DashboardConfig';
 import { RegistrySubscriptionManager, RegistryChangeCallback, RegistryChangeEvent } from '../utils/RegistrySubscriptionManager';
+import { isEntityHiddenOrDisabled, resolveEntityAreaId } from '../utils/registryDisplay';
+
+const RENDER_THROTTLE_MS = 500;
 
 export class HomeView extends HTMLElement {
-  // Dashboard-specific management - keyed by dashboard URL base
-  private static dashboardActiveInstances = new Map<string, HomeView>();
-  private static dashboardStateListeners = new Map<string, (isActive: boolean) => void>();
-  
   private config?: any;
   private _hass?: any;
   private _config?: any;
@@ -34,38 +33,17 @@ export class HomeView extends HTMLElement {
   private contentMutationObserver?: MutationObserver;
   private _rendered = false;
   private _isTransitioning = false; // Add transition state
-  private _lastRenderTime = 0; // Track when last render happened
-  private _modeSwitchDebounce: number | null = null; // Prevent rapid mode switching
+  private _lastRenderTime = 0;
+  private _pendingRender?: ReturnType<typeof setTimeout>;
   private chipsElement?: HomeChips;
   private visibilityChangeHandler?: () => void; // Add visibility change handler
   private globalRefreshHandler?: (event: Event) => void; // Add global refresh handler
-  private currentDashboardKey: string = 'default'; // Track current dashboard key
   
   // Registry subscription handlers for automatic updates
   private registrySubscriptionManager?: RegistrySubscriptionManager;
   private registryChangeHandler?: RegistryChangeCallback;
   private rtlChangeHandler?: (isRTL: boolean, language: string) => void;
   private _lastLanguage?: string; // Track language for change detection
-  
-  // Helper methods for dashboard-specific management
-  private getDashboardKey(): string {
-    // Extract dashboard key directly from URL (independent method)
-    const currentPath = window.location.pathname;
-    const dashboardMatch = currentPath.match(/\/([^\/]+)/);
-    return dashboardMatch && dashboardMatch[1] ? dashboardMatch[1] : 'default';
-  }
-  
-  private getCurrentActiveInstance(): HomeView | undefined {
-    return HomeView.dashboardActiveInstances.get(this.currentDashboardKey);
-  }
-  
-  private setCurrentActiveInstance(instance: HomeView | undefined): void {
-    if (instance) {
-      HomeView.dashboardActiveInstances.set(this.currentDashboardKey, instance);
-    } else {
-      HomeView.dashboardActiveInstances.delete(this.currentDashboardKey);
-    }
-  }
   
   // Page renderers
   private homePage: HomePage;
@@ -85,9 +63,6 @@ export class HomeView extends HTMLElement {
   constructor() {
     super();
     
-    // Initialize dashboard key for this instance
-    this.currentDashboardKey = this.getDashboardKey();
-    
     // Initialize callbacks
     this.refreshCallback = () => this.refreshDashboard();
 
@@ -102,7 +77,7 @@ export class HomeView extends HTMLElement {
     this.appleHeader.addRefreshCallback(this.refreshCallback);
     
     this.dragAndDropManager = new DragAndDropManager(
-      (areaId: string) => this.handleSaveCurrentOrder(areaId),
+      (areaId: string, grid?: HTMLElement) => this.handleSaveCurrentOrder(areaId, grid),
       this.customizationManager,
       'home' // Use home context for home page
     );
@@ -124,10 +99,10 @@ export class HomeView extends HTMLElement {
     this.visibilityChangeHandler = () => {
       if (document.hidden) {
         // Pause all cameras when page becomes hidden
-        this.pauseCameras();
+        this.callOnCards('pauseCamera');
       } else {
         // Resume cameras when page becomes visible
-        this.resumeCameras();
+        this.callOnCards('resumeCamera');
       }
     };
     document.addEventListener('visibilitychange', this.visibilityChangeHandler);
@@ -142,18 +117,13 @@ export class HomeView extends HTMLElement {
     };
     document.addEventListener('hg-dashboard-refresh', this.globalRefreshHandler);
     
-    // Set up registry subscription manager for automatic updates
+    if (this.content) this.setupContentMutationObserver();
+
     this.setupRegistrySubscriptions();
     
     // Set up RTL change detection
     this.setupRTLChangeDetection();
     
-    // Note: Dashboard registration is handled by the strategy when it generates the dashboard
-    // The DashboardStateManager tracks which dashboards are Apple Home dashboards
-    
-    // CRITICAL: Set this as the active instance for this dashboard
-    this.setCurrentActiveInstance(this);
-
   }
 
   disconnectedCallback() {
@@ -167,6 +137,11 @@ export class HomeView extends HTMLElement {
     }
     if (this.globalRefreshHandler) {
       document.removeEventListener('hg-dashboard-refresh', this.globalRefreshHandler);
+    }
+
+    if (this._pendingRender) {
+      clearTimeout(this._pendingRender);
+      this._pendingRender = undefined;
     }
 
     // Stop watching content for card DOM changes
@@ -187,20 +162,12 @@ export class HomeView extends HTMLElement {
     }
     
     // Clean up managers and their resources
-    if (this.dragAndDropManager) {
-      this.dragAndDropManager.disableDragAndDrop(this.content!);
-    }
-    
-    // Clear active instance reference if this is the active one for this dashboard
-    if (this.getCurrentActiveInstance() === this) {
-      this.setCurrentActiveInstance(undefined);
+    if (this.content) {
+      this.dragAndDropManager.disableDragAndDrop(this.content);
     }
     
     // Clean up all camera managers in the current content
-    this.cleanupCameras();
-    
-    // Note: We don't manually set dashboard inactive here
-    // The DashboardStateManager handles this automatically via URL change detection
+    this.callOnCards('cleanup');
   }
 
   private async handleGlobalRefresh(customizations: any) {
@@ -283,20 +250,13 @@ export class HomeView extends HTMLElement {
       return;
     }
 
-    // For create/update, check current entity registry state from hass
-    const entityReg = this._hass.entities?.[entityId];
-
-    if (event.action === 'update' && entityReg) {
-      // Entity hidden or disabled → fade out
-      if (entityReg.hidden_by || entityReg.disabled_by) {
+    if (event.action === 'update') {
+      if (isEntityHiddenOrDisabled(this._hass, entityId)) {
         this.fadeOutCard(entityId);
         return;
       }
 
-      // Check if entity moved areas
-      const newAreaId = entityReg.area_id
-        || (entityReg.device_id ? this._hass.devices?.[entityReg.device_id]?.area_id : null)
-        || 'no_area';
+      const newAreaId = resolveEntityAreaId(this._hass, entityId);
 
       const wrapper = this.content.querySelector(`.entity-card-wrapper[data-entity-id="${entityId}"]`) as HTMLElement;
       if (wrapper) {
@@ -372,8 +332,10 @@ export class HomeView extends HTMLElement {
   private fadeOutCard(entityId: string): void {
     if (!this.content) return;
     const wrapper = this.content.querySelector(`.entity-card-wrapper[data-entity-id="${entityId}"]`) as HTMLElement;
-    if (!wrapper) return;
+    if (wrapper) this.fadeOutWrapper(wrapper);
+  }
 
+  private fadeOutWrapper(wrapper: HTMLElement): void {
     const parentGrid = wrapper.closest('.area-entities') as HTMLElement;
 
     // Cleanup the card's resources before removing
@@ -527,24 +489,8 @@ export class HomeView extends HTMLElement {
     this.updateChips();
   }
 
-  private updateEntityVisibility(entityId: string, isVisible: boolean): void {
-    // Fast DOM manipulation for visibility changes
-    if (this.content) {
-      const cardWrapper = this.content.querySelector(`[data-entity-id="${entityId}"]`);
-      if (cardWrapper) {
-        (cardWrapper as HTMLElement).style.display = isVisible ? '' : 'none';
-      }
-    }
-  }
-
   private async updateHeaderForConfig() {
     if (!this.content || !this.config) return;
-    
-    // Remove existing group title (but keep Apple Home header)
-    const existingGroupTitle = this.content.querySelector('.apple-group-title');
-    if (existingGroupTitle) {
-      existingGroupTitle.remove();
-    }
     
     // Determine page type for header configuration
     const isGroupPage = this.config.pageType === 'group';
@@ -683,7 +629,6 @@ export class HomeView extends HTMLElement {
     // Only render if this is the first time
     if (!this._rendered) {
       this.renderPage('setHass-firstTime');
-      this._rendered = true;
     } else {
       // Optimized updates: route the new hass only to affected cards
       this.updateExistingCards(oldHass, this._hass);
@@ -749,58 +694,6 @@ export class HomeView extends HTMLElement {
     return false;
   }
 
-
-  /**
-   * Detect if this is a navigation change vs regular hass update
-   */
-  private isNavigationChange(oldHass: any, newHass: any): boolean {
-    if (!oldHass) return true; // First load
-    
-    // Check if this component needs to render different content
-    // This is more conservative than always re-rendering
-    const hasContent = this.content && this.content.children.length > 0;
-    const hasChips = this.chipsElement && this.chipsElement.isConfigured();
-    
-    // Force recreation if content or chips are missing (indicating navigation)
-    if (!hasContent || !hasChips) {
-      return true;
-    }
-    
-    return false;
-  }
-
-  /**
-   * CRITICAL FIX: Force complete component recreation
-   * This solves navigation state issues by ensuring clean state
-   */
-  private forceCompleteRecreation() {
-    
-    // Reset all state flags
-    this._rendered = false;
-    
-    // Clear chips reference to force recreation
-    if (this.chipsElement) {
-      this.chipsElement = undefined;
-    }
-    
-    // Ensure shadow root is properly initialized
-    this.ensureShadowRootExists();
-    
-    // Remove only dynamic content, keep permanent elements (header, chips) in place
-    if (this.content) {
-      const permanentSelectors = ['.hg-header.permanent-header', '.permanent-chips'];
-      Array.from(this.content.children).forEach(child => {
-        const isPermanent = permanentSelectors.some(sel => child.matches(sel));
-        if (!isPermanent) child.remove();
-      });
-
-      const permanentChips = this.content.querySelector('.permanent-chips') as HTMLElement;
-      if (permanentChips) {
-        this.chipsElement = new HomeChips(permanentChips, this.customizationManager);
-        this.setupChipsCallback();
-      }
-    }
-  }
 
   private async ensureShadowRootExists() {
     let structureCreated = false;
@@ -1762,8 +1655,11 @@ export class HomeView extends HTMLElement {
     }
     
     // Always ensure we have the references after HTML structure exists
-    this.content = this.shadowRoot!.querySelector('.page-content') as HTMLElement;
-    this.setupContentMutationObserver();
+    const content = this.shadowRoot!.querySelector('.page-content') as HTMLElement;
+    if (content !== this.content) {
+      this.content = content;
+      this.setupContentMutationObserver();
+    }
 
     // Only update chips reference if we don't have one or if it's not connected
     if (!this.chipsElement) {
@@ -1927,95 +1823,35 @@ export class HomeView extends HTMLElement {
       this.chipsElement.setEditMode(editMode);
     }
     
-    // Handle drag and drop for different page types
-    if (this.config?.pageType === 'room') {
-      // For room pages, use the main drag and drop manager (same as home page)
-      // Room pages now let HomeView handle drag and drop like other sections
-      if (editMode) {
-        // Enable drag and drop with a small delay to ensure cards are rendered
-        setTimeout(() => {
-          this.dragAndDropManager!.enableDragAndDrop(this.content!);
-          // Update entity wrapper styles for edit mode - SAME AS HOME PAGE
-          const entityWrappers = this.content!.querySelectorAll('.entity-card-wrapper');
-          entityWrappers.forEach((wrapper) => {
-            const element = wrapper as HTMLElement;
-            element.classList.toggle('edit-mode', true);
-            
-            const appleHomeCard = element.querySelector('home-glass-card') as any;
-            if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
-              appleHomeCard.refreshEditMode();
-            }
-          });
-        }, 100);
-      } else {
-        this.dragAndDropManager!.disableDragAndDrop(this.content!);
-        // Update entity wrapper styles when disabling edit mode
-        const entityWrappers = this.content!.querySelectorAll('.entity-card-wrapper');
-        entityWrappers.forEach((wrapper) => {
-          const element = wrapper as HTMLElement;
-          element.classList.toggle('edit-mode', false);
-        
-          const appleHomeCard = element.querySelector('home-glass-card') as any;
-          if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
-            appleHomeCard.refreshEditMode();
-          }
-        });
-        
-        // Save current layout when exiting edit mode
-        this.saveCurrentLayout();
-      }
-    } else if (this.config?.pageType === 'cameras') {
-      // For cameras pages, use the cameras page's drag and drop handler
-      if (this.camerasPage) {
-        this.camerasPage.updateDragAndDrop(editMode, this.content!);
-      }
-    } else if (this.config?.pageType === 'scenes') {
-      // For scenes pages, use the scenes page's drag and drop handler
-      if (this.scenesPage) {
-        this.scenesPage.updateDragAndDrop(editMode, this.content!);
-      }
+    const pageType = this.config?.pageType;
+    if (pageType === 'cameras') {
+      this.camerasPage.updateDragAndDrop(editMode, this.content!);
+    } else if (pageType === 'scenes') {
+      this.scenesPage.updateDragAndDrop(editMode, this.content!);
     } else {
-      // For home page and other pages, use the main drag and drop manager
-      // Update drag and drop based on edit mode
       if (editMode) {
-        // Add a small delay to ensure cards are fully rendered
+        // Let the cards finish rendering before wiring up sortables
         setTimeout(() => {
           this.dragAndDropManager.enableDragAndDrop(this.content!);
-          // Update entity wrapper styles for edit mode
-          const entityWrappers = this.content!.querySelectorAll('.entity-card-wrapper');
-          entityWrappers.forEach((wrapper) => {
-            const element = wrapper as HTMLElement;
-            element.classList.toggle('edit-mode', true);
-            
-            const appleHomeCard = element.querySelector('home-glass-card') as any;
-            if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
-              appleHomeCard.refreshEditMode();
-            }
-          });
+          this.setWrappersEditMode(true);
         }, 100);
       } else {
         this.dragAndDropManager.disableDragAndDrop(this.content!);
-        // Update entity wrapper styles
-        // Update entity wrapper styles for edit mode
-        const entityWrappers = this.content!.querySelectorAll('.entity-card-wrapper');
-        entityWrappers.forEach((wrapper) => {
-          const element = wrapper as HTMLElement;
-          element.classList.toggle('edit-mode', false);
-        
-          const appleHomeCard = element.querySelector('home-glass-card') as any;
-          if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
-            appleHomeCard.refreshEditMode();
-          }
-        });
-        
-        // Save current layout when exiting edit mode
-        this.saveCurrentLayout();
+        this.setWrappersEditMode(false);
+        // Pending order changes are persisted by flushDeferredSaves() above
       }
-      
-      // Update host styles
-          // Update host styles for edit mode
-      this.classList.toggle('edit-mode', editMode);
+
+      if (pageType !== 'room') {
+        this.classList.toggle('edit-mode', editMode);
+      }
     }
+  }
+
+  private setWrappersEditMode(editMode: boolean) {
+    this.content!.querySelectorAll('.entity-card-wrapper').forEach((wrapper) => {
+      wrapper.classList.toggle('edit-mode', editMode);
+      (wrapper.querySelector('home-glass-card') as any)?.refreshEditMode?.();
+    });
   }
 
   private setupChipsCallback() {
@@ -2034,23 +1870,12 @@ export class HomeView extends HTMLElement {
     }
   }
 
-  private updatePage() {
-  }
-
   // All drag-and-drop functionality is now handled by DragAndDropManager
 
-  private async saveCurrentLayout() {
-    // Use the customization manager to save
-    try {
-      await this.customizationManager.saveLayoutToStorage(this._hass!);
-    } catch (error) {
-      console.error('Error saving layout:', error);
-    }
-  }
-
-  private handleSaveCurrentOrder(areaId: string) {
-    // Implementation for saving the current card order
-    const areaContainer = this.content!.querySelector(`[data-area-id="${areaId}"]`);
+  // A room renders several grids with the same data-area-id (one per device group),
+  // so the dragged grid must be passed in; the selector is only a fallback.
+  private handleSaveCurrentOrder(areaId: string, grid?: HTMLElement) {
+    const areaContainer = grid ?? this.content!.querySelector(`[data-area-id="${areaId}"]`);
     if (!areaContainer) return;
 
     const wrappers = areaContainer.querySelectorAll('.entity-card-wrapper:not(.drag-placeholder)');
@@ -2076,21 +1901,11 @@ export class HomeView extends HTMLElement {
     }
     
     this.customizationManager.saveCardOrderWithContext(areaId, newOrder, context, domain);
-    
-
   }
 
   private getPageContext(): string {
-    if (this.config?.pageType === 'room') {
-      return 'room';
-    } else if (this.config?.pageType === 'scenes') {
-      return 'scenes';
-    } else if (this.config?.pageType === 'cameras') {
-      return 'cameras';
-    } else if (this.config?.pageType === 'group') {
-      return 'group';
-    }
-    return 'home';
+    const pageType = this.config?.pageType;
+    return ['room', 'scenes', 'cameras', 'group'].includes(pageType) ? pageType : 'home';
   }
 
   private async renderPage(source: string = 'unknown') {
@@ -2098,12 +1913,19 @@ export class HomeView extends HTMLElement {
       return;
     }
     
-    // Prevent multiple renders within 500ms (accounts for settings save delays)
-    const now = Date.now();
-    if (now - this._lastRenderTime < 500) {
+    // Renders requested inside the window are coalesced into one trailing render.
+    const wait = RENDER_THROTTLE_MS - (Date.now() - this._lastRenderTime);
+    if (wait > 0) {
+      this._rendered = false;
+      if (!this._pendingRender) {
+        this._pendingRender = setTimeout(() => {
+          this._pendingRender = undefined;
+          void this.renderPage(source);
+        }, wait);
+      }
       return;
     }
-    this._lastRenderTime = now;
+    this._lastRenderTime = Date.now();
     
     // Set transition state to prevent concurrent renders
     this._isTransitioning = true;
@@ -2121,13 +1943,10 @@ export class HomeView extends HTMLElement {
       await new Promise(r => setTimeout(r, 150));
     }
 
-    // **CRITICAL FIX**: Force complete chips reset when reusing component instance
-    this.forceChipsReset();
-
-    // Pause cameras before switching pages
-    this.pauseCameras();
-
     try {
+      this.forceChipsReset();
+      this.callOnCards('pauseCamera');
+
       if (this.config?.pageType === 'group' && this.config?.deviceGroup) {
         // Configure and render group page
         this.groupPage.hass = this._hass;
@@ -2218,7 +2037,9 @@ export class HomeView extends HTMLElement {
     // CRITICAL: Ensure chips are recreated and properly configured after page render
     this.ensureChipsExist();
     
-    // Update chips after page is rendered to reflect current state
+    // Pages await mid-render, so pushes that arrived meanwhile never reached the new cards.
+    this.indexDirty = true;
+    this.updateExistingCards(undefined, this._hass);
     this.updateChips();
     
     // CRITICAL: Connect chips to header after everything is ready
@@ -2228,7 +2049,7 @@ export class HomeView extends HTMLElement {
 
     // Resume cameras after page is rendered
     setTimeout(() => {
-      this.resumeCameras();
+      this.callOnCards('resumeCamera');
       this._isTransitioning = false;
     }, 200);
   }
@@ -2339,19 +2160,7 @@ export class HomeView extends HTMLElement {
 
   // Customization functionality is now handled by CardManager
   private async toggleTallCard(entityId: string, areaId: string, clickedElement?: HTMLElement) {
-    // Determine the correct context based on the current page type
-    let context = 'home'; // default
-    
-    if (this.config?.pageType === 'room') {
-      context = 'room';
-    } else if (this.config?.pageType === 'scenes') {
-      context = 'scenes';
-    } else if (this.config?.pageType === 'cameras') {
-      context = 'cameras';
-    } else if (this.config?.pageType === 'group') {
-      context = 'group';
-    }
-    // If pageType is undefined or 'home', context remains 'home'
+    const context = this.getPageContext();
     
     // Wait for the toggle operation to complete with the correct context
     const newTallState = await this.cardManager.toggleTallCard(entityId, areaId, context);
@@ -2418,40 +2227,10 @@ export class HomeView extends HTMLElement {
     return 1;
   }
 
-  private cleanupCameras() {
-    // Find all home-glass-card elements and cleanup their cameras
-    if (this.content) {
-      const cards = this.content.querySelectorAll('home-glass-card');
-      cards.forEach((card: any) => {
-        if (card && typeof card.cleanup === 'function') {
-          card.cleanup();
-        }
-      });
-    }
-  }
-
-  private pauseCameras() {
-    // Find all home-glass-card elements and pause their cameras
-    if (this.content) {
-      const cards = this.content.querySelectorAll('home-glass-card');
-      cards.forEach((card: any) => {
-        if (card && typeof card.pauseCamera === 'function') {
-          card.pauseCamera();
-        }
-      });
-    }
-  }
-
-  private resumeCameras() {
-    // Find all home-glass-card elements and resume their cameras
-    if (this.content) {
-      const cards = this.content.querySelectorAll('home-glass-card');
-      cards.forEach((card: any) => {
-        if (card && typeof card.resumeCamera === 'function') {
-          card.resumeCamera();
-        }
-      });
-    }
+  private callOnCards(method: 'cleanup' | 'pauseCamera' | 'resumeCamera') {
+    this.content?.querySelectorAll('home-glass-card').forEach((card: any) => {
+      if (typeof card[method] === 'function') card[method]();
+    });
   }
 
   private async refreshDashboard() {
@@ -2489,16 +2268,7 @@ export class HomeView extends HTMLElement {
       for (const entityId of favRemoved) {
         const favCard = favGrid?.querySelector(`.entity-card-wrapper[data-entity-id="${entityId}"]`) as HTMLElement;
         if (favCard) {
-          favCard.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
-          favCard.style.opacity = '0';
-          favCard.style.transform = 'scale(0.8)';
-          setTimeout(() => {
-            favCard.remove();
-            // Clean up empty favorites section
-            if (favGrid && favGrid.children.length === 0) {
-              this.cleanupEmptySection(favGrid);
-            }
-          }, 250);
+          this.fadeOutWrapper(favCard);
           didChange = true;
         }
       }
@@ -2606,26 +2376,22 @@ export class HomeView extends HTMLElement {
     // Don't add if already in DOM
     if (this.content.querySelector(`.entity-card-wrapper[data-entity-id="${entityId}"]`)) return;
 
-    // Determine area
-    const entityReg = this._hass.entities?.[entityId];
-    const areaId = entityReg?.area_id
-      || (entityReg?.device_id ? this._hass.devices?.[entityReg.device_id]?.area_id : null)
-      || 'no_area';
+    const areaId = resolveEntityAreaId(this._hass, entityId);
 
     // Find the area grid
     const grid = this.content.querySelector(`.area-entities[data-area-id="${areaId}"]`) as HTMLElement;
     if (!grid) return; // Area not on this page
 
-    // Create card
-    const domain = entityId.split('.')[0];
-    const friendlyName = state.attributes?.friendly_name || entityId.split('.')[1].replace(/_/g, ' ');
+    this.appendCardWithFadeIn(grid, entityId, state);
+  }
 
+  private appendCardWithFadeIn(grid: HTMLElement, entityId: string, state: any): void {
     const cardElement = document.createElement('home-glass-card') as any;
     cardElement.setConfig({
       type: 'custom:home-glass-card',
       entity: entityId,
-      name: friendlyName,
-      domain: domain,
+      name: state.attributes?.friendly_name || entityId.split('.')[1].replace(/_/g, ' '),
+      domain: entityId.split('.')[0],
       is_tall: false
     });
     cardElement.hass = this._hass;
@@ -2633,10 +2399,8 @@ export class HomeView extends HTMLElement {
     const wrapper = document.createElement('div');
     wrapper.className = 'entity-card-wrapper';
     wrapper.dataset.entityId = entityId;
-
     wrapper.appendChild(cardElement);
 
-    // Fade in
     wrapper.style.opacity = '0';
     wrapper.style.transform = 'scale(0.8)';
     grid.appendChild(wrapper);
@@ -2683,33 +2447,7 @@ export class HomeView extends HTMLElement {
     // Don't add if already in favorites grid
     if (favGrid.querySelector(`.entity-card-wrapper[data-entity-id="${entityId}"]`)) return;
 
-    const domain = entityId.split('.')[0];
-    const friendlyName = state.attributes?.friendly_name || entityId.split('.')[1].replace(/_/g, ' ');
-
-    const cardElement = document.createElement('home-glass-card') as any;
-    cardElement.setConfig({
-      type: 'custom:home-glass-card',
-      entity: entityId,
-      name: friendlyName,
-      domain: domain,
-      is_tall: false
-    });
-    cardElement.hass = this._hass;
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'entity-card-wrapper';
-    wrapper.dataset.entityId = entityId;
-    wrapper.appendChild(cardElement);
-
-    wrapper.style.opacity = '0';
-    wrapper.style.transform = 'scale(0.8)';
-    favGrid.appendChild(wrapper);
-
-    requestAnimationFrame(() => {
-      wrapper.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
-      wrapper.style.opacity = '1';
-      wrapper.style.transform = 'scale(1)';
-    });
+    this.appendCardWithFadeIn(favGrid, entityId, state);
   }
 
   private getScrollParent(): Element | null {
