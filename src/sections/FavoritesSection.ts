@@ -162,11 +162,6 @@ export class FavoritesSection {
       is_tall: isTallCard
     };
     
-    // Add default icon for scenes/scripts without icons
-    if (DashboardConfig.isScenesDomain(domain) && !state.attributes?.icon) {
-      (card as any).default_icon = 'mdi:home';
-    }
-    
     return card;
   }
 }
