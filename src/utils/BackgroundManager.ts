@@ -1,6 +1,7 @@
 import { CustomizationManager } from './CustomizationManager';
 import { DashboardConfig } from '../config/DashboardConfig';
 import { DashboardStateManager } from './DashboardStateManager';
+import { dimFor, wallpaperLuminance, wallpaperTone } from './wallpaperLuminance';
 
 export interface BackgroundConfig {
   type: 'preset' | 'custom';
@@ -13,6 +14,8 @@ export class BackgroundManager {
   // Most recently created/used instance; the shared listeners below act on it.
   private static current: BackgroundManager | null = null;
   private static listenersRegistered = false;
+  private static probeToken = 0;
+  private static probeCache?: { css: string; luminance: number };
 
   // Predefined gradient backgrounds
   static readonly PRESET_BACKGROUNDS = {
@@ -93,6 +96,34 @@ export class BackgroundManager {
 
   private static removeStyle(): void {
     document.querySelector('#hg-body-background')?.remove();
+    BackgroundManager.probeToken++;
+    BackgroundManager.clearWallpaperTone();
+  }
+
+  private static clearWallpaperTone(): void {
+    const root = document.documentElement;
+    root.removeAttribute('data-hg-wallpaper');
+    root.style.removeProperty('--hg-glass-dim');
+    root.style.removeProperty('--hg-title-shadow');
+  }
+
+  // Inline custom properties would beat the solid-surface overrides, so they are skipped there.
+  private static applyWallpaperTone(luminance: number): void {
+    const root = document.documentElement;
+    const tone = wallpaperTone(luminance);
+    root.setAttribute('data-hg-wallpaper', tone);
+    if (root.dataset.hgSolid === 'true' || window.matchMedia?.('(prefers-reduced-transparency: reduce)').matches) return;
+    root.style.setProperty('--hg-glass-dim', dimFor(luminance));
+    root.style.setProperty('--hg-title-shadow', tone === 'light' ? '0 1px 3px rgba(0, 0, 0, 0.45)' : 'none');
+  }
+
+  private async probeWallpaper(backgroundStyle: string): Promise<void> {
+    const token = ++BackgroundManager.probeToken;
+    const cached = BackgroundManager.probeCache;
+    const luminance = cached?.css === backgroundStyle ? cached.luminance : await wallpaperLuminance(backgroundStyle);
+    if (token !== BackgroundManager.probeToken || luminance === undefined) return;
+    BackgroundManager.probeCache = { css: backgroundStyle, luminance };
+    BackgroundManager.applyWallpaperTone(luminance);
   }
 
   private getBackgroundConfig(): BackgroundConfig {
@@ -171,6 +202,7 @@ export class BackgroundManager {
     `;
     
     document.head.appendChild(styleElement);
+    void this.probeWallpaper(backgroundStyle);
   }
 
   /**
