@@ -429,6 +429,68 @@ export function getCardStyles(): string {
       padding: calc(var(--hg-tile-padding) * 1.1);
     }
 
+    .home-glass-card.media-card {
+      --card-text-color: ${GLYPH_ON_COLOR};
+      --card-state-color: color-mix(in srgb, ${GLYPH_ON_COLOR} 78%, transparent);
+      --card-icon-color: ${GLYPH_ON_COLOR};
+      --card-icon-bg: color-mix(in srgb, var(--hg-label-on-active) 45%, transparent);
+      background:
+        linear-gradient(to top, color-mix(in srgb, var(--hg-label-on-active) 70%, transparent), color-mix(in srgb, var(--hg-label-on-active) 25%, transparent)),
+        var(--media-art) center / cover no-repeat;
+    }
+
+    .media-play-btn {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      padding: 0;
+      margin-inline-start: auto;
+      align-self: center;
+      border: none;
+      border-radius: var(--hg-radius-icon-well);
+      background: color-mix(in srgb, var(--hg-label-on-active) 45%, transparent);
+      color: ${GLYPH_ON_COLOR};
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      transition:
+        transform var(--hg-dur-fast) var(--hg-ease-spring),
+        background-color var(--hg-dur) var(--hg-ease-standard);
+    }
+
+    /* Visual size stays 32px; the hit area grows to the minimum target */
+    .media-play-btn::after {
+      content: '';
+      position: absolute;
+      inset: calc((32px - var(--hg-hit-min)) / 2);
+    }
+
+    .media-play-btn:active {
+      transform: scale(var(--hg-press-scale));
+    }
+
+    .media-play-btn:focus-visible {
+      outline: var(--hg-focus-ring);
+      outline-offset: var(--hg-focus-offset);
+    }
+
+    .media-play-btn ha-icon {
+      --mdc-icon-size: 20px;
+    }
+
+    :host(.tall-design) .media-play-btn {
+      position: absolute;
+      top: 0;
+      inset-inline-end: 0;
+    }
+
+    .home-glass-card.rtl .media-play-btn {
+      margin-inline-start: auto;
+    }
+
     @media (max-width: 359px) {
       .entity-name {
         -webkit-line-clamp: 1;
