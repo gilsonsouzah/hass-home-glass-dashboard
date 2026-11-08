@@ -7,7 +7,10 @@ import { AreaSection } from '../sections/AreaSection';
 import { StatusSection } from '../sections/StatusSection';
 import { WeatherSection } from '../sections/WeatherSection';
 import { EnergySection } from '../sections/EnergySection';
-import { Entity } from '../types/types';
+import { Entity, Device, Area, HassUpdatable } from '../types/types';
+import { resetPage } from './pageChrome';
+import { applyHomeOrdering } from './homeOrdering';
+import { orderSections } from '../utils/sectionOrder';
 
 export class GroupPage {
   private customizationManager?: CustomizationManager;
@@ -19,7 +22,6 @@ export class GroupPage {
   private energySection?: EnergySection;
   private _hass?: any;
   private _group?: DeviceGroup;
-  private _config?: any;
 
   constructor() {
     // Regular class constructor
@@ -32,6 +34,8 @@ export class GroupPage {
     if (this.statusSection) {
       this.statusSection.hass = hass;
     }
+    (this.weatherSection as HassUpdatable | undefined)?.update?.(hass);
+    (this.energySection as HassUpdatable | undefined)?.update?.(hass);
   }
 
   get hass() {
@@ -39,7 +43,6 @@ export class GroupPage {
   }
 
   async setConfig(config: any) {
-    this._config = config;
     this._group = config.group;
 
     // Initialize customization manager from config
@@ -62,46 +65,17 @@ export class GroupPage {
   }
 
   /**
-   * Get the area ID for an entity, checking both entity registry and device registry
+   * Entities without an area, or inside a hidden area section, are not rendered.
    */
-  private getEntityAreaId(entity: Entity, devices: any[]): string | null {
-    // Check entity's area_id first
-    if (entity.area_id) {
-      return entity.area_id;
-    }
-
-    // If entity doesn't have an area but has a device, check device's area
-    if (entity.device_id) {
-      const device = devices.find((d) => d.id === entity.device_id);
-      if (device?.area_id) {
-        return device.area_id;
-      }
-    }
-
-    // No area found - return null (entity will not be rendered)
-    return null;
-  }
-
-  /**
-   * Check if an entity belongs to a hidden area/section
-   */
-  private isEntityInHiddenArea(entity: Entity, devices: any[], hiddenSections: string[]): boolean {
-    const areaId = this.getEntityAreaId(entity, devices);
-    // If entity has no area, it should be hidden (not rendered)
-    if (areaId === null) return true;
-    if (hiddenSections.length === 0) return false;
+  private isEntityInHiddenArea(entity: Entity, devicesById: Map<string, Device>, hiddenSections: string[]): boolean {
+    const areaId = DataService.resolveAreaId(entity, devicesById);
+    if (!areaId) return true;
     return hiddenSections.includes(areaId);
   }
 
-  private createGroupTitle(group: DeviceGroup): HTMLElement {
-    const titleElement = document.createElement('h1');
-    titleElement.className = 'apple-page-title';
-
-    // Get the proper group name from DashboardConfig
+  private groupTitle(group: DeviceGroup): string {
     const groupStyle = DashboardConfig.getGroupStyle(group);
-    titleElement.textContent = typeof groupStyle.name === 'function' ? groupStyle.name() : groupStyle.name;
-
-    return titleElement;
+    return typeof groupStyle.name === 'function' ? groupStyle.name() : groupStyle.name;
   }
 
   async render(
@@ -110,64 +84,39 @@ export class GroupPage {
     hass: any,
     onTallToggle?: (entityId: string, areaId: string) => void | Promise<void | boolean>
   ): Promise<void> {
-    // Remove only dynamic content, keep permanent elements (header, chips) in place
-    const permanentSelectors = ['.hg-header', '.permanent-chips'];
-    Array.from(container.children).forEach(child => {
-      const isPermanent = permanentSelectors.some(sel => child.matches(sel));
-      if (!isPermanent) child.remove();
-    });
-
-    // Add group title after header but before chips
-    const groupTitle = this.createGroupTitle(group);
-    const existingPermanentChips = container.querySelector('.permanent-chips');
-    if (existingPermanentChips) {
-      container.insertBefore(groupTitle, existingPermanentChips);
-    } else {
-      container.appendChild(groupTitle);
-    }
+    resetPage(container, this.groupTitle(group));
 
     try {
       // Fetch all data in parallel
-      const [areas, entities, devices] = await Promise.all([
+      const [areas, entities, devices, extraAccessories] = await Promise.all([
         DataService.getAreas(hass),
         DataService.getEntities(hass),
-        DataService.getDevices(hass)
+        DataService.getDevices(hass),
+        this.customizationManager?.getExtraAccessories().then(v => v || []) ?? Promise.resolve([] as string[])
       ]);
+      const devicesById = DataService.indexDevices(devices);
+      const entitiesById = new Map(entities.map((e) => [e.entity_id, e]));
 
       // Get hidden sections (areas) for filtering
       const hiddenSections = this.customizationManager?.getHiddenSections() || [];
 
-      // Filter entities for supported domains and exclude those marked for exclusion
-      const supportedEntities = entities.filter(entity => {
-        // Exclude configuration and diagnostic entities from auto-discovery
-        if (entity.entity_category === 'config' || entity.entity_category === 'diagnostic') {
-          return false;
-        }
-        const domain = entity.entity_id.split('.')[0];
-        return DashboardConfig.isSupportedDomain(domain);
-      });
+      const supportedEntities = entities.filter((entity) =>
+        DataService.isDiscoverable(entity, extraAccessories, (d) => DashboardConfig.isSupportedDomain(d))
+      );
 
-      // Create a separate list for status section that includes sensor domains
-      const statusEntities = entities.filter(entity => {
-        // Exclude configuration and diagnostic entities from auto-discovery
-        if (entity.entity_category === 'config' || entity.entity_category === 'diagnostic') {
-          return false;
-        }
-        const domain = entity.entity_id.split('.')[0];
-        return DashboardConfig.isStatusDomain(domain);
-      });
+      // Separate list for the status section, which also includes sensor domains
+      const statusEntities = entities.filter((entity) =>
+        DataService.isDiscoverable(entity, extraAccessories, (d) => DashboardConfig.isStatusDomain(d))
+      );
 
-      // Batch-fetch exclusion list once, then filter synchronously
       const excludedFromDashboard = new Set(await this.customizationManager?.getExcludedFromDashboard() || []);
 
-      const filteredEntities = supportedEntities.filter(entity =>
-        !excludedFromDashboard.has(entity.entity_id) && !this.isEntityInHiddenArea(entity, devices, hiddenSections)
-      );
-      const filteredStatusEntities = statusEntities.filter(entity =>
-        !excludedFromDashboard.has(entity.entity_id) && !this.isEntityInHiddenArea(entity, devices, hiddenSections)
+      const filteredEntities = supportedEntities.filter((entity) => !excludedFromDashboard.has(entity.entity_id));
+      const filteredStatusEntities = statusEntities.filter(
+        (entity) => !excludedFromDashboard.has(entity.entity_id) && !this.isEntityInHiddenArea(entity, devicesById, hiddenSections)
       );
 
-      // Get all special section entities
+      // Scenes and cameras are often unassigned, so they skip the area check
       const scenesEntities = filteredEntities.filter((entity) =>
         DashboardConfig.isScenesDomain(entity.entity_id.split('.')[0])
       );
@@ -177,7 +126,9 @@ export class GroupPage {
       );
 
       const regularEntities = filteredEntities.filter(
-        (entity) => !DashboardConfig.isSpecialSectionDomain(entity.entity_id.split('.')[0])
+        (entity) =>
+          !DashboardConfig.isSpecialSectionDomain(entity.entity_id.split('.')[0]) &&
+          !this.isEntityInHiddenArea(entity, devicesById, hiddenSections)
       );
 
       // Group regular entities by area
@@ -239,21 +190,20 @@ export class GroupPage {
       // For ENERGY group, also include energy/power sensor entities (sensor domain isn't in SUPPORTED_DOMAINS)
       if (group === DeviceGroup.ENERGY) {
         const energySensors = entities.filter(entity => {
-          if (entity.entity_category === 'config' || entity.entity_category === 'diagnostic') return false;
+          if (!DataService.isDiscoverable(entity, extraAccessories, () => true)) return false;
           if (excludedFromDashboard.has(entity.entity_id)) return false;
-          if (this.isEntityInHiddenArea(entity, devices, hiddenSections)) return false;
+          if (this.isEntityInHiddenArea(entity, devicesById, hiddenSections)) return false;
           const domain = entity.entity_id.split('.')[0];
           if (domain !== 'sensor') return false;
           const state = hass.states[entity.entity_id];
           if (!state) return false;
           const dc = state.attributes?.device_class;
-          const reg = (hass.entities as any)?.[entity.entity_id];
-          if (reg?.hidden_by || reg?.disabled_by) return false;
+          if (!DataService.isVisibleInRegistry(hass, entity.entity_id)) return false;
           return (dc === 'energy' || dc === 'power') && !!state.attributes?.state_class;
         });
 
         for (const entity of energySensors) {
-          const areaId = this.getEntityAreaId(entity, devices);
+          const areaId = DataService.resolveAreaId(entity, devicesById);
           if (!areaId) continue;
           if (!groupEntitiesByArea[areaId]) {
             groupEntitiesByArea[areaId] = [];
@@ -280,7 +230,7 @@ export class GroupPage {
         // This ties battery status to the device it belongs to, not just the area
         if (domain === 'sensor' && deviceClass === 'battery') {
           // Find the device this battery entity belongs to
-          const batteryEntityRegistry = entities.find((e) => e.entity_id === entity.entity_id);
+          const batteryEntityRegistry = entitiesById.get(entity.entity_id);
           if (!batteryEntityRegistry?.device_id) {
             return false; // No device, don't show
           }
@@ -341,7 +291,7 @@ export class GroupPage {
       }
 
       const customizations = this.customizationManager.getCustomizations();
-      const customizedAreas = this.applyCustomizations(groupEntitiesByArea, customizations);
+      const customizedAreas = applyHomeOrdering(groupEntitiesByArea, customizations.home);
 
       // Determine which special entities belong to this group
       let groupScenesEntities: Entity[] = [];
@@ -361,6 +311,7 @@ export class GroupPage {
       await this.renderSectionsInOrder(
         container,
         customizedAreas,
+        areas,
         groupScenesEntities,
         groupCamerasEntities,
         hass,
@@ -374,6 +325,7 @@ export class GroupPage {
   private async renderSectionsInOrder(
     container: HTMLElement,
     entitiesByArea: { [areaId: string]: Entity[] },
+    areas: Area[],
     scenesEntities: Entity[],
     camerasEntities: Entity[],
     hass: any,
@@ -438,37 +390,13 @@ export class GroupPage {
       }
     }
 
-    // Apply section ordering
-    let orderedSectionIds: string[] = [];
-
-    if (sectionOrder.length > 0) {
-      // Use saved order
-      orderedSectionIds = sectionOrder.filter((id) => availableSections.has(id));
-
-      // Add any new sections that weren't in the saved order
-      for (const sectionId of availableSections.keys()) {
-        if (!orderedSectionIds.includes(sectionId)) {
-          if (sectionId === 'weather_section' || sectionId === 'energy_section') {
-            orderedSectionIds.unshift(sectionId);
-          } else {
-          orderedSectionIds.push(sectionId);
-        }
-      }
-      }
-    } else {
-      // Default order: weather, energy, scenes, cameras, then areas alphabetically
-      orderedSectionIds = Array.from(availableSections.keys()).sort((a, b) => {
-        if (a === 'weather_section') return -1;
-        if (b === 'weather_section') return 1;
-        if (a === 'energy_section') return -1;
-        if (b === 'energy_section') return 1;
-        if (a === 'scenes_section') return -1;
-        if (b === 'scenes_section') return 1;
-        if (a === 'cameras_section') return -1;
-        if (b === 'cameras_section') return 1;
-        return a.localeCompare(b);
-      });
-    }
+    const areaNames = Object.fromEntries(areas.map((area) => [area.area_id, area.name]));
+    const orderedSectionIds = orderSections(
+      Array.from(availableSections.keys()),
+      sectionOrder,
+      areaNames,
+      hass.locale?.language || hass.language
+    );
 
     // Render sections in order, respecting visibility settings
     for (const sectionId of orderedSectionIds) {
@@ -476,72 +404,5 @@ export class GroupPage {
         await availableSections.get(sectionId)!();
       }
     }
-  }
-
-  private applyCustomizations(
-    entitiesByArea: { [areaId: string]: Entity[] },
-    customizations: any
-  ): { [areaId: string]: Entity[] } {
-    const result: { [areaId: string]: Entity[] } = {};
-
-    // Apply area order customizations
-    const areaIds = Object.keys(entitiesByArea);
-    let sortedAreaIds = areaIds;
-
-    if (customizations.home?.sections?.order) {
-      sortedAreaIds = [...areaIds].sort((a, b) => {
-        const aOrder = customizations.home.sections.order!.indexOf(a);
-        const bOrder = customizations.home.sections.order!.indexOf(b);
-
-        // If both areas have custom order, use it
-        if (aOrder !== -1 && bOrder !== -1) {
-          return aOrder - bOrder;
-        }
-        // If only one has custom order, prioritize it
-        if (aOrder !== -1) return -1;
-        if (bOrder !== -1) return 1;
-        // If neither has custom order, keep original order
-        return 0;
-      });
-    }
-
-    // Apply entity customizations within each area
-    for (const areaId of sortedAreaIds) {
-      const areaEntities = [...entitiesByArea[areaId]];
-      const areaCustomizations = customizations.home?.entities_order?.[areaId];
-
-      if (areaCustomizations) {
-        // Apply entity order - areaCustomizations is now the array directly
-        const entityOrder = Array.isArray(areaCustomizations) ? areaCustomizations : [];
-        if (entityOrder.length > 0) {
-          areaEntities.sort((a, b) => {
-            const aOrder = entityOrder.indexOf(a.entity_id);
-            const bOrder = entityOrder.indexOf(b.entity_id);
-
-            if (aOrder !== -1 && bOrder !== -1) {
-              return aOrder - bOrder;
-            }
-            if (aOrder !== -1) return -1;
-            if (bOrder !== -1) return 1;
-            return 0;
-          });
-        }
-      }
-
-      // Apply tall card settings from home.tall_cards
-      if (customizations.home?.tall_cards) {
-        areaEntities.forEach((entity) => {
-          if (customizations.home.tall_cards.includes(entity.entity_id)) {
-            (entity as any).is_tall = true;
-          } else if (customizations.home.tall_cards.includes(`!${entity.entity_id}`)) {
-            (entity as any).is_tall = false;
-          }
-        });
-      }
-
-      result[areaId] = areaEntities;
-    }
-
-    return result;
   }
 }

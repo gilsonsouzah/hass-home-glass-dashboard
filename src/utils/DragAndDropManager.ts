@@ -1,13 +1,16 @@
 import Sortable from 'sortablejs';
 import { ChipsConfigurationManager } from './ChipsConfigurationManager';
+import { pointOf } from './pointer';
+
+const GRID_SELECTOR = '.area-entities, .room-group-grid, .scenes-grid, .cameras-grid';
 
 /**
  * DragAndDropManager using SortableJS with custom visual drag element
  */
 export class DragAndDropManager {
-  private saveOrderCallback: (areaId: string) => void;
+  private saveOrderCallback: (areaId: string, grid: HTMLElement) => void;
   private customizationManager: any;
-  private context: string;
+  private context: string | (() => string);
   private sortableInstances: Map<HTMLElement, Sortable> = new Map();
   private static globalStylesInjected: boolean = false;
   
@@ -17,7 +20,12 @@ export class DragAndDropManager {
   // Custom drag visual element
   private dragVisual: HTMLElement | null = null;
 
-  constructor(saveOrderCallback: (areaId: string) => void, customizationManager?: any, context: string = 'home') {
+  /** `context` may be a getter, for a manager shared across pages with different contexts. */
+  constructor(
+    saveOrderCallback: (areaId: string, grid: HTMLElement) => void,
+    customizationManager?: any,
+    context: string | (() => string) = 'home'
+  ) {
     this.saveOrderCallback = saveOrderCallback;
     this.customizationManager = customizationManager;
     this.context = context;
@@ -385,7 +393,7 @@ export class DragAndDropManager {
   /**
    * Get common Sortable options
    */
-  private getBaseSortableOptions(isCarousel: boolean = false): Sortable.Options {
+  private getBaseSortableOptions(): Sortable.Options {
     return {
       animation: 150,
       easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
@@ -417,27 +425,18 @@ export class DragAndDropManager {
       // Filter out control buttons only - NOT images (they're in shadow DOM anyway)
       filter: '.entity-controls, .entity-control-btn',
       preventOnFilter: false,
-      
-      // Handle filtered elements
-      onFilter: () => {
-        // Filtering handled by SortableJS
-      },
-      
-      onMove: () => {
-        return true; // Allow all moves
-      },
     };
   }
 
   enableDragAndDrop(container: HTMLElement): void {
     // Handle grid containers
-    const gridContainers = container.querySelectorAll('.area-entities, .room-group-grid');
+    const gridContainers = container.querySelectorAll(GRID_SELECTOR);
     gridContainers.forEach(gridContainer => {
       this.setupGridSortable(gridContainer as HTMLElement);
     });
     
     // Handle carousel containers - exclude chips
-    const carouselContainers = container.querySelectorAll('.carousel-grid:not(.chips)');
+    const carouselContainers = container.querySelectorAll('.carousel-grid');
     carouselContainers.forEach(carouselGrid => {
       this.setupCarouselSortable(carouselGrid as HTMLElement);
     });
@@ -460,18 +459,12 @@ export class DragAndDropManager {
     let lastX = 0, lastY = 0;
     
     const onMove = (e: MouseEvent | TouchEvent) => {
-      if (e instanceof TouchEvent) {
-        lastX = e.touches[0].clientX;
-        lastY = e.touches[0].clientY;
-      } else {
-        lastX = e.clientX;
-        lastY = e.clientY;
-      }
+      ({ x: lastX, y: lastY } = pointOf(e));
       this.updateDragVisual(lastX, lastY);
     };
     
     const sortable = new Sortable(gridContainer, {
-      ...this.getBaseSortableOptions(false),
+      ...this.getBaseSortableOptions(),
       draggable: '.entity-card-wrapper',
       
       onStart: (evt) => {
@@ -524,7 +517,7 @@ export class DragAndDropManager {
         this.reconnectSingleCameraManager(evt.item);
         
         if (areaId) {
-          this.saveOrderCallback(areaId);
+          this.saveOrderCallback(areaId, gridContainer);
         }
       }
     });
@@ -613,28 +606,18 @@ export class DragAndDropManager {
     };
     
     const onMove = (e: MouseEvent | TouchEvent) => {
-      if (e instanceof TouchEvent) {
-        lastX = e.touches[0].clientX;
-        lastY = e.touches[0].clientY;
-      } else {
-        lastX = e.clientX;
-        lastY = e.clientY;
-      }
+      ({ x: lastX, y: lastY } = pointOf(e));
       this.updateDragVisual(lastX, lastY);
       updateScrollSpeed(lastX);
     };
 
     const sortable = new Sortable(carouselGrid, {
-      ...this.getBaseSortableOptions(true),
+      ...this.getBaseSortableOptions(),
       draggable: '.entity-card-wrapper',
       direction: 'horizontal',
       
       // Disable SortableJS built-in scroll - we handle it manually
       scroll: false,
-      
-      onChoose: () => {
-        // Item chosen for drag
-      },
       
       onStart: (evt) => {
         DragAndDropManager.isReordering = true;
@@ -767,19 +750,13 @@ export class DragAndDropManager {
     };
     
     const onMove = (e: MouseEvent | TouchEvent) => {
-      if (e instanceof TouchEvent) {
-        lastX = e.touches[0].clientX;
-        lastY = e.touches[0].clientY;
-      } else {
-        lastX = e.clientX;
-        lastY = e.clientY;
-      }
+      ({ x: lastX, y: lastY } = pointOf(e));
       this.updateDragVisual(lastX, lastY);
       updateScrollSpeed(lastX);
     };
 
     const sortable = new Sortable(chipsCarousel, {
-      ...this.getBaseSortableOptions(true),
+      ...this.getBaseSortableOptions(),
       draggable: '.chip-wrapper',
       direction: 'horizontal',
       scroll: false,
@@ -815,7 +792,7 @@ export class DragAndDropManager {
         document.body.style.userSelect = '';
         if ('vibrate' in navigator) navigator.vibrate(30);
         
-        const chipsGrid = evt.item.closest('.carousel-grid.chips') as HTMLElement;
+        const chipsGrid = evt.item.closest('.chips-grid') as HTMLElement;
         if (chipsGrid) {
           this.updateChipsOrder(chipsGrid);
         }
@@ -860,7 +837,7 @@ export class DragAndDropManager {
     });
     
     if (this.customizationManager) {
-      this.customizationManager.updateCarouselOrderWithContext(areaId, sectionType, newOrder, this.context);
+      this.customizationManager.updateCarouselOrderWithContext(areaId, sectionType, newOrder, typeof this.context === 'function' ? this.context() : this.context);
     }
   }
 
@@ -872,7 +849,7 @@ export class DragAndDropManager {
   }
 
   disableDragAndDrop(container: HTMLElement): void {
-    const gridContainers = container.querySelectorAll('.area-entities, .room-group-grid');
+    const gridContainers = container.querySelectorAll(GRID_SELECTOR);
     gridContainers.forEach(gridContainer => {
       const instance = this.sortableInstances.get(gridContainer as HTMLElement);
       if (instance) {
@@ -889,11 +866,5 @@ export class DragAndDropManager {
         this.sortableInstances.delete(carouselGrid as HTMLElement);
       }
     });
-  }
-
-  destroy(): void {
-    this.removeDragVisual();
-    this.sortableInstances.forEach((instance) => instance.destroy());
-    this.sortableInstances.clear();
   }
 }

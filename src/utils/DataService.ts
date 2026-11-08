@@ -1,10 +1,11 @@
-import { Area, Entity, Device } from '../types/types';
+import type { Area, Entity, Device } from '../types/types';
 
 export class DataService {
   static async getDevices(hass: any): Promise<Device[]> {
     try {
       return await hass.callWS({ type: 'config/device_registry/list' });
     } catch (error) {
+      console.error('Home Glass: failed to load device registry', error);
       return [];
     }
   }
@@ -13,28 +14,54 @@ export class DataService {
     try {
       return await hass.callWS({ type: 'config/area_registry/list' });
     } catch (error) {
+      console.error('Home Glass: failed to load area registry', error);
       return [];
     }
   }
 
   static async getEntities(hass: any): Promise<Entity[]> {
     try {
-      const entities = await hass.callWS({ type: 'config/entity_registry/list' });
-      // Filter out hidden and disabled entities
-      return entities.filter((entity: Entity) => {
-        // Exclude entities that are hidden by user, integration, etc.
-        if (entity.hidden_by) {
-          return false;
-        }
-        // Exclude entities that are disabled
-        if (entity.disabled_by) {
-          return false;
-        }
-        return true;
-      });
+      const entities: Entity[] = await hass.callWS({ type: 'config/entity_registry/list' });
+      return entities.filter((entity) => this.isEnabled(entity));
     } catch (error) {
+      console.error('Home Glass: failed to load entity registry', error);
       return [];
     }
+  }
+
+  private static isEnabled(entity: Entity): boolean {
+    return !entity.hidden_by && !entity.disabled_by;
+  }
+
+  /**
+   * Shared auto-discovery rule for every page. Extra accessories bypass the category and domain
+   * checks; config and diagnostic entities otherwise never show.
+   */
+  static isDiscoverable(
+    entity: Entity,
+    extraAccessories: string[],
+    isDomainSupported: (domain: string) => boolean
+  ): boolean {
+    if (!this.isEnabled(entity)) return false;
+    if (extraAccessories.includes(entity.entity_id)) return true;
+    if (entity.entity_category === 'config' || entity.entity_category === 'diagnostic') return false;
+    return isDomainSupported(entity.entity_id.split('.')[0]);
+  }
+
+  /** Same hidden/disabled rule, read from the live `hass.entities` registry. */
+  static isVisibleInRegistry(hass: any, entityId: string): boolean {
+    const registry = hass.entities?.[entityId];
+    return !registry || (!registry.hidden_by && !registry.disabled_by);
+  }
+
+  static indexDevices(devices: Device[]): Map<string, Device> {
+    return new Map(devices.map((device) => [device.id, device]));
+  }
+
+  /** Entity area first, then its device's area. */
+  static resolveAreaId(entity: Entity, devicesById: Map<string, Device>): string | undefined {
+    if (entity.area_id) return entity.area_id;
+    return entity.device_id ? devicesById.get(entity.device_id)?.area_id : undefined;
   }
 
   static groupEntitiesByArea(
@@ -43,35 +70,17 @@ export class DataService {
     devices: Device[] = []
   ): { [areaId: string]: Entity[] } {
     const entitiesByArea: { [areaId: string]: Entity[] } = {};
+    const devicesById = this.indexDevices(devices);
 
-    // Initialize areas
     areas.forEach((area) => {
       entitiesByArea[area.area_id] = [];
     });
 
-    // Group entities by area (entities without area are skipped)
+    // Entities without an area are skipped
     entities.forEach((entity) => {
-      let areaId = entity.area_id;
-
-      // If entity doesn't have an area but has a device, check device's area
-      if (!areaId && entity.device_id) {
-        const device = devices.find((d) => d.id === entity.device_id);
-        if (device?.area_id) {
-          areaId = device.area_id;
-        }
-      }
-
-      // Skip entities without area
-      if (!areaId) {
-        return;
-      }
-
-      // Initialize area if it doesn't exist (shouldn't happen, but just in case)
-      if (!entitiesByArea[areaId]) {
-        entitiesByArea[areaId] = [];
-      }
-
-      entitiesByArea[areaId].push(entity);
+      const areaId = this.resolveAreaId(entity, devicesById);
+      if (!areaId) return;
+      (entitiesByArea[areaId] ??= []).push(entity);
     });
 
     return entitiesByArea;
