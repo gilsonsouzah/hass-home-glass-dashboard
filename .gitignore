@@ -1,8 +1,6 @@
 # Dependencies
 /node_modules/
 
-# Keep dist tracked (CI builds commit it)
-# (dist not ignored intentionally)
 
 # Logs
 npm-debug.log*
@@ -37,3 +35,5 @@ pids/
 deploy.sh
 *.code-workspace
 CHANGELOG.md
+# Built by CI into the release zip
+custom_components/home_glass/frontend/

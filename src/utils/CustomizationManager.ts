@@ -12,7 +12,7 @@ export class CustomizationManager {
   private dashboardStateListener?: (isActive: boolean, dashboardKey?: string | null) => void;
   // While deferred, saves stay in memory instead of writing the lovelace config.
   // Each `lovelace/config/save` makes Home Assistant re-render the dashboard from
-  // the strategy, which rebuilds AppleHomeView and drops edit mode - so saving on
+  // the strategy, which rebuilds HomeView and drops edit mode - so saving on
   // every drag-and-drop drop would kick the user out of edit mode each time.
   private deferSaves = false;
   private hasPendingSave = false;
@@ -310,7 +310,7 @@ export class CustomizationManager {
 
   async saveCustomizations() {
     if (!this._hass) {
-      console.error('🏠 APPLE HOME: No Home Assistant instance available for saving');
+      console.error('Home Glass: No Home Assistant instance available for saving');
       return;
     }
 
@@ -324,12 +324,12 @@ export class CustomizationManager {
       const success = await this.saveCustomizationsToStorage(this._hass, this.customizations);
       
       if (!success) {
-        console.error('🏠 APPLE HOME: Failed to save customizations - check Home Assistant setup');
-        console.error('🏠 APPLE HOME: Please create an input_text helper named "apple_home_dashboard_config" for persistent storage');
+        console.error('Home Glass: Failed to save customizations - check Home Assistant setup');
+        console.error('Home Glass: Please create an input_text helper named "apple_home_dashboard_config" for persistent storage');
       }
       // Removed global refresh - individual components should handle their own updates
     } catch (error) {
-      console.error('🏠 APPLE HOME: Error in saveCustomizations:', error);
+      console.error('Home Glass: Error in saveCustomizations:', error);
     }
   }
 
@@ -337,7 +337,7 @@ export class CustomizationManager {
    * Trigger a global dashboard refresh event that all pages can listen to
    */
   triggerGlobalDashboardRefresh() {
-    const event = new CustomEvent('apple-home-dashboard-refresh', {
+    const event = new CustomEvent('hg-dashboard-refresh', {
       detail: { 
         customizations: this.customizations,
         timestamp: Date.now()
@@ -355,7 +355,7 @@ export class CustomizationManager {
 
   async loadCustomizations(): Promise<any> {
     if (!this._hass) {
-      console.error('🏠 APPLE HOME: No Home Assistant instance available for loading');
+      console.error('Home Glass: No Home Assistant instance available for loading');
       return { home: {}, pages: {}, ui: {}, background: {} };
     }
     
@@ -376,7 +376,7 @@ export class CustomizationManager {
       return { home: {}, pages: {}, ui: {}, background: {} };
       
     } catch (error) {
-      console.error('🏠 APPLE HOME: Error loading customizations:', error);
+      console.error('Home Glass: Error loading customizations:', error);
       return { home: {}, pages: {}, ui: {}, background: {} };
     }
   }
@@ -411,7 +411,7 @@ export class CustomizationManager {
       return true;
       
     } catch (error) {
-      console.error('🏠 APPLE HOME: Error saving customizations:', error);
+      console.error('Home Glass: Error saving customizations:', error);
       return false;
     }
   }
@@ -425,12 +425,12 @@ export class CustomizationManager {
       if (!nm?.shadowRoot) return;
       
       // Check if we already have our style to avoid duplicates
-      const existingStyle = nm.shadowRoot.getElementById('apple-home-dashboard-hide');
+      const existingStyle = nm.shadowRoot.getElementById('hg-dashboard-hide');
       if (existingStyle) return;
       
       // Inject CSS to hide toasts immediately
       const style = document.createElement("style");
-      style.id = 'apple-home-dashboard-hide';
+      style.id = 'hg-dashboard-hide';
       style.textContent = `ha-toast { display: none !important; }`;
       nm.shadowRoot.appendChild(style);
       
@@ -450,12 +450,12 @@ export class CustomizationManager {
           toast.close();
           clearInterval(checkInterval);
           // Remove the injected hide style so other HA notifications work
-          const injectedStyle = nm.shadowRoot?.getElementById('apple-home-dashboard-hide');
+          const injectedStyle = nm.shadowRoot?.getElementById('hg-dashboard-hide');
           if (injectedStyle) injectedStyle.remove();
         } else if (attempts >= maxAttempts) {
           clearInterval(checkInterval);
           // Remove the injected hide style even on timeout
-          const injectedStyle = nm.shadowRoot?.getElementById('apple-home-dashboard-hide');
+          const injectedStyle = nm.shadowRoot?.getElementById('hg-dashboard-hide');
           if (injectedStyle) injectedStyle.remove();
         }
       }, 100);
@@ -489,7 +489,7 @@ export class CustomizationManager {
       console.warn('🔑 Could not extract dashboard key from path:', currentPath);
       return null; // Default fallback for storage
     } catch (error) {
-      console.error('🏠 APPLE HOME: Error getting dashboard key:', error);
+      console.error('Home Glass: Error getting dashboard key:', error);
       return null;
     }
   }

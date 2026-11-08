@@ -32,7 +32,7 @@ export interface ChipData {
   navigationPath?: string;
 }
 
-export class AppleChips {
+export class HomeChips {
   private config?: ChipsConfig;
   private _hass?: any;
   private chips: ChipData[] = [];
@@ -146,7 +146,7 @@ export class AppleChips {
   setConfig(config: ChipsConfig) {
     // Merge with default config
     this.config = {
-      ...AppleChips.getDefaultConfig(),
+      ...HomeChips.getDefaultConfig(),
       ...config,
     };
 
@@ -190,12 +190,12 @@ export class AppleChips {
     for (const entityId of Object.keys(newHass.states)) {
       const dotIdx = entityId.indexOf('.');
       const domain = entityId.substring(0, dotIdx);
-      const isRelevantDomain = AppleChips.RELEVANT_DOMAINS.has(domain);
+      const isRelevantDomain = HomeChips.RELEVANT_DOMAINS.has(domain);
 
       if (!isRelevantDomain) {
         // Quick water keyword check only for non-relevant domains (binary_sensor, sensor)
         if (domain !== 'binary_sensor' && domain !== 'sensor') continue;
-        const isWaterEntity = AppleChips.WATER_KEYWORDS.some(kw => entityId.includes(kw)) ||
+        const isWaterEntity = HomeChips.WATER_KEYWORDS.some(kw => entityId.includes(kw)) ||
                              newHass.states[entityId]?.attributes?.device_class === 'moisture';
         const isPowerEntity = domain === 'sensor' && newHass.states[entityId]?.attributes?.device_class === 'power';
         if (!isWaterEntity && !isPowerEntity) continue;
@@ -507,7 +507,7 @@ export class AppleChips {
         }
 
         .chip-wrapper.edit-mode {
-          animation: apple-home-shake 1.3s ease-in-out infinite;
+          animation: hg-shake 1.3s ease-in-out infinite;
           touch-action: none;
         }
 
@@ -710,7 +710,7 @@ export class AppleChips {
           }
         }
 
-        @keyframes apple-home-shake {
+        @keyframes hg-shake {
           0%, 100% { transform: translateX(0px) rotate(0deg); }
           10% { transform: translateX(-1px) rotate(-0.6deg); }
           20% { transform: translateX(1px) rotate(0.6deg); }

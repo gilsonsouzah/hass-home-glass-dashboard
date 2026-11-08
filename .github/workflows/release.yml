@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test --if-present
+      - run: npm run build
+      - name: Check manifest version matches tag
+        run: |
+          v=$(jq -r .version custom_components/home_glass/manifest.json)
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "manifest $v != tag $GITHUB_REF_NAME"; exit 1; }
+      - name: Zip integration
+        run: cd custom_components/home_glass && zip -r ../../home_glass.zip .
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: home_glass.zip
+          generate_release_notes: true

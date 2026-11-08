@@ -111,9 +111,9 @@ export class DragAndDropManager {
     this.dragVisual.style.left = (x - rect.width / 2) + 'px';
     this.dragVisual.style.top = (y - rect.height / 2) + 'px';
     
-    const card = element.querySelector('apple-home-card');
+    const card = element.querySelector('home-glass-card');
     if (card && card.shadowRoot) {
-      const innerCard = card.shadowRoot.querySelector('.apple-home-card') as HTMLElement;
+      const innerCard = card.shadowRoot.querySelector('.home-glass-card') as HTMLElement;
       if (innerCard) {
         // Just copy the card's styles directly
         const cardStyle = window.getComputedStyle(innerCard);
@@ -851,7 +851,7 @@ export class DragAndDropManager {
     entityWrappers.forEach((wrapper) => {
       let entityId = (wrapper as HTMLElement).dataset.entityId;
       if (!entityId) {
-        const appleHomeCard = wrapper.querySelector('apple-home-card') as any;
+        const appleHomeCard = wrapper.querySelector('home-glass-card') as any;
         if (appleHomeCard) {
           entityId = appleHomeCard.entity || appleHomeCard.entityId || appleHomeCard.getAttribute('entity');
         }
@@ -865,7 +865,7 @@ export class DragAndDropManager {
   }
 
   private reconnectSingleCameraManager(wrapper: HTMLElement): void {
-    const appleHomeCard = wrapper.querySelector('apple-home-card') as any;
+    const appleHomeCard = wrapper.querySelector('home-glass-card') as any;
     if (appleHomeCard && typeof appleHomeCard.reloadCameraImage === 'function') {
       appleHomeCard.reloadCameraImage();
     }

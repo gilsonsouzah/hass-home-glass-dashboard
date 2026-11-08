@@ -68,7 +68,7 @@ export class FavoritesSection {
 
     // Add favorites section title
     const titleDiv = document.createElement('div');
-    titleDiv.className = 'apple-home-section-title';
+    titleDiv.className = 'hg-section-title';
     titleDiv.innerHTML = `<span>${localize('section_titles.favorites')}</span>`;
     container.appendChild(titleDiv);
 
@@ -109,8 +109,8 @@ export class FavoritesSection {
       // Use the same card creation logic as AreaSection
       let cardElement: HTMLElement;
       
-      if (cardConfig.type === 'custom:apple-home-card') {
-        cardElement = document.createElement('apple-home-card') as HTMLElement;
+      if (cardConfig.type === 'custom:home-glass-card') {
+        cardElement = document.createElement('home-glass-card') as HTMLElement;
         
         // For favorites, always use regular size (not tall)
         const configWithTall = { ...cardConfig, is_tall: false };
@@ -157,7 +157,7 @@ export class FavoritesSection {
     let friendlyName = state.attributes?.friendly_name || entityId;
     
     // Determine card type and properties
-    let cardType = 'custom:apple-home-card';
+    let cardType = 'custom:home-glass-card';
     let isTallCard = false; // Favorites are always regular size
     
     const card: CardConfig = {

@@ -60,7 +60,7 @@ export class StatusSection {
     const statusSection = document.createElement('div');
     statusSection.className = 'apple-status-section';
 
-    // Generate HTML with embedded styles (like AppleChips)
+    // Generate HTML with embedded styles (like HomeChips)
     statusSection.innerHTML = this.generateHTML(visibleItems, areaId);
 
     container.appendChild(statusSection);
@@ -991,7 +991,7 @@ export class StatusSection {
     const domain = entityId.split('.')[0];
 
     // Determine card type and properties
-    let cardType = 'custom:apple-home-card';
+    let cardType = 'custom:home-glass-card';
     let isTallCard = false;
 
     // Check if domain should be tall by default
@@ -1081,8 +1081,8 @@ export class StatusSection {
     try {
       let cardElement: HTMLElement;
 
-      if (cardConfig.type === 'custom:apple-home-card') {
-        cardElement = document.createElement('apple-home-card') as HTMLElement;
+      if (cardConfig.type === 'custom:home-glass-card') {
+        cardElement = document.createElement('home-glass-card') as HTMLElement;
 
         // Determine if card should be tall based on customizations
         const shouldBeTall =
@@ -1268,7 +1268,7 @@ export class StatusSection {
         grid-row: span 2;
       }
 
-      .entity-card-wrapper apple-home-card {
+      .entity-card-wrapper home-glass-card {
         width: 100%;
         height: 100%;
         border-radius: var(--apple-card-radius, 22px);

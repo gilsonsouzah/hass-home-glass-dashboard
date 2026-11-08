@@ -58,7 +58,7 @@ export class RoomPage {
       this.areaSection = new AreaSection(this.customizationManager, this.cardManager);
       this.statusSection = new StatusSection(this.customizationManager, this.cardManager);
       
-      // Note: No DragAndDropManager needed - AppleHomeView handles drag and drop like for HomePage
+      // Note: No DragAndDropManager needed - HomeView handles drag and drop like for HomePage
     }
   }
 
@@ -80,7 +80,7 @@ export class RoomPage {
     this._container = container;
     
     // Remove only dynamic content, keep permanent elements (header, chips) in place
-    const permanentSelectors = ['.apple-home-header', '.permanent-chips'];
+    const permanentSelectors = ['.hg-header', '.permanent-chips'];
     Array.from(container.children).forEach(child => {
       const isPermanent = permanentSelectors.some(sel => child.matches(sel));
       if (!isPermanent) child.remove();
@@ -342,7 +342,7 @@ export class RoomPage {
       
       // Add section title
       const titleDiv = document.createElement('div');
-      titleDiv.className = 'apple-home-section-title';
+      titleDiv.className = 'hg-section-title';
       titleDiv.innerHTML = `<span>${typeof groupStyle.name === 'function' ? groupStyle.name() : groupStyle.name}</span>`;
       container.appendChild(titleDiv);
 
@@ -412,7 +412,7 @@ export class RoomPage {
     
     // Create base card configuration
     const cardConfig: any = {
-      type: 'custom:apple-home-card',
+      type: 'custom:home-glass-card',
       entity: entityId,
       name: entityCustomizations?.name || stateObj.attributes.friendly_name || entityId,
       area_id: entity.area_id,
@@ -441,7 +441,7 @@ export class RoomPage {
     }
 
     // Create the card element
-    const cardElement = document.createElement('apple-home-card') as any;
+    const cardElement = document.createElement('home-glass-card') as any;
     cardElement.setConfig(cardConfig);
     cardElement.hass = hass;
 

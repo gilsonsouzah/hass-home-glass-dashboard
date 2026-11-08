@@ -1,5 +1,5 @@
 import { DeviceGroup } from '../config/DashboardConfig';
-import { ChipsConfig } from '../sections/AppleChips';
+import { ChipsConfig } from '../sections/HomeChips';
 import { CustomizationManager } from './CustomizationManager';
 
 export interface ChipsSettings {

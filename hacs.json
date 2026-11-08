@@ -1,6 +1,7 @@
 {
-  "name": "Apple Home Dashboard Strategy",
+  "name": "Home Glass Dashboard",
   "render_readme": true,
-  "filename": "apple-home-dashboard.js",
-  "homeassistant": "2024.7.0"
+  "homeassistant": "2025.1.0",
+  "zip_release": true,
+  "filename": "home_glass.zip"
 }

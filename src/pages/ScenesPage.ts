@@ -52,7 +52,7 @@ export class ScenesPage {
     // Store container reference for use in save methods
     this._container = container;
     // Remove only dynamic content, keep permanent elements (header, chips) in place
-    const permanentSelectors = ['.apple-home-header', '.permanent-chips'];
+    const permanentSelectors = ['.hg-header', '.permanent-chips'];
     Array.from(container.children).forEach(child => {
       const isPermanent = permanentSelectors.some(sel => child.matches(sel));
       if (!isPermanent) child.remove();
@@ -177,7 +177,7 @@ export class ScenesPage {
     
     // Create base card configuration
     const cardConfig: any = {
-      type: 'custom:apple-home-card',
+      type: 'custom:home-glass-card',
       entity: entityId,
       name: entityCustomizations?.name || stateObj.attributes.friendly_name || entityId,
       area_id: 'scenes_section',
@@ -206,7 +206,7 @@ export class ScenesPage {
     }
 
     // Create the card element
-    const cardElement = document.createElement('apple-home-card') as any;
+    const cardElement = document.createElement('home-glass-card') as any;
     cardElement.setConfig(cardConfig);
     cardElement.hass = hass;
 
@@ -233,7 +233,7 @@ export class ScenesPage {
           const element = wrapper as HTMLElement;
           element.classList.toggle('edit-mode', true);
           
-          const appleHomeCard = element.querySelector('apple-home-card') as any;
+          const appleHomeCard = element.querySelector('home-glass-card') as any;
           if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
             appleHomeCard.refreshEditMode();
           }
@@ -247,7 +247,7 @@ export class ScenesPage {
         const element = wrapper as HTMLElement;
         element.classList.toggle('edit-mode', false);
         
-        const appleHomeCard = element.querySelector('apple-home-card') as any;
+        const appleHomeCard = element.querySelector('home-glass-card') as any;
         if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
           appleHomeCard.refreshEditMode();
         }

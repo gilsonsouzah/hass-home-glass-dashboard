@@ -118,7 +118,7 @@ export class AreaSection {
     }
 
     // Determine card type and properties
-    let cardType = 'custom:apple-home-card';
+    let cardType = 'custom:home-glass-card';
     let isTallCard = false;
 
     // Check if domain should be tall by default
@@ -157,8 +157,8 @@ export class AreaSection {
     try {
       let cardElement: HTMLElement;
 
-      if (cardConfig.type === 'custom:apple-home-card') {
-        cardElement = document.createElement('apple-home-card') as HTMLElement;
+      if (cardConfig.type === 'custom:home-glass-card') {
+        cardElement = document.createElement('home-glass-card') as HTMLElement;
 
         // Determine if card should be tall based on customizations
         const shouldBeTall = this.cardManager.shouldCardBeTall(

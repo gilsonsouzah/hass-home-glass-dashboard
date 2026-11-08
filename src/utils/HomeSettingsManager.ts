@@ -213,7 +213,7 @@ export class HomeSettingsManager {
 
   private createModal() {
     this.modal = document.createElement('div');
-    this.modal.className = 'apple-home-settings-modal';
+    this.modal.className = 'hg-settings-modal';
     
     this.modal.innerHTML = `
       <div class="modal-backdrop"></div>
@@ -489,12 +489,12 @@ export class HomeSettingsManager {
     // Inject centralized liquid glass button styles
     injectLiquidGlassStyles();
     
-    if (document.querySelector('#apple-home-settings-styles')) return;
+    if (document.querySelector('#hg-settings-styles')) return;
 
     const style = document.createElement('style');
-    style.id = 'apple-home-settings-styles';
+    style.id = 'hg-settings-styles';
     style.textContent = `
-      .apple-home-settings-modal {
+      .hg-settings-modal {
         position: fixed;
         top: 0;
         left: 0;
@@ -509,7 +509,7 @@ export class HomeSettingsManager {
         transition: opacity 0.3s ease;
       }
 
-      .apple-home-settings-modal.show {
+      .hg-settings-modal.show {
         opacity: 1;
       }
 
@@ -539,7 +539,7 @@ export class HomeSettingsManager {
         transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
       }
 
-      .apple-home-settings-modal.show .modal-content {
+      .hg-settings-modal.show .modal-content {
         transform: scale(1);
         opacity: 1;
       }
@@ -783,7 +783,7 @@ export class HomeSettingsManager {
       }
 
       @media (max-width: 480px) {
-        .apple-home-settings-modal {
+        .hg-settings-modal {
           align-items: flex-end;
           justify-content: center;
         }
@@ -799,7 +799,7 @@ export class HomeSettingsManager {
           margin: 0;
         }
 
-        .apple-home-settings-modal.show .modal-content {
+        .hg-settings-modal.show .modal-content {
           transform: translateY(0);
           opacity: 1;
         }
@@ -930,12 +930,12 @@ export class HomeSettingsManager {
       }
 
       /* Loading state styles */
-      .apple-home-settings-modal.saving .modal-content {
+      .hg-settings-modal.saving .modal-content {
         pointer-events: none;
       }
 
-      .apple-home-settings-modal.saving .modal-done,
-      .apple-home-settings-modal.saving .modal-cancel {
+      .hg-settings-modal.saving .modal-done,
+      .hg-settings-modal.saving .modal-cancel {
         pointer-events: none;
         opacity: 0.5;
       }
@@ -950,11 +950,11 @@ export class HomeSettingsManager {
         animation: spin 0.8s linear infinite;
       }
 
-      .apple-home-settings-modal.saving .modal-done ha-icon {
+      .hg-settings-modal.saving .modal-done ha-icon {
         display: none;
       }
 
-      .apple-home-settings-modal.saving .modal-done .save-spinner {
+      .hg-settings-modal.saving .modal-done .save-spinner {
         display: block;
       }
 
@@ -1921,7 +1921,7 @@ export class HomeSettingsManager {
     this.closeModal();
     
     // Remove styles
-    const styleElement = document.querySelector('#apple-home-settings-styles');
+    const styleElement = document.querySelector('#hg-settings-styles');
     if (styleElement) {
       styleElement.remove();
     }

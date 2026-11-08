@@ -1,11 +1,11 @@
-import { AppleHomeCard } from './AppleHomeCard';
+import { HomeCard } from './HomeCard';
 import { DragAndDropManager } from '../utils/DragAndDropManager';
 import { EditModeManager } from '../utils/EditModeManager';
-import { AppleHeader, HeaderConfig } from '../sections/AppleHeader';
+import { HomeHeader, HeaderConfig } from '../sections/HomeHeader';
 import { CustomizationManager } from '../utils/CustomizationManager';
 import { CardManager } from '../utils/CardManager';
 import { setupLocalize, localize } from '../utils/LocalizationService';
-import { AppleChips } from '../sections/AppleChips';
+import { HomeChips } from '../sections/HomeChips';
 import { ChipsConfigurationManager } from '../utils/ChipsConfigurationManager';
 import { HomePage } from '../pages/HomePage';
 import { GroupPage } from '../pages/GroupPage';
@@ -16,9 +16,9 @@ import { CamerasPage } from '../pages/CamerasPage';
 import { DeviceGroup } from '../config/DashboardConfig';
 import { RegistrySubscriptionManager, RegistryChangeCallback, RegistryChangeEvent } from '../utils/RegistrySubscriptionManager';
 
-export class AppleHomeView extends HTMLElement {
+export class HomeView extends HTMLElement {
   // Dashboard-specific management - keyed by dashboard URL base
-  private static dashboardActiveInstances = new Map<string, AppleHomeView>();
+  private static dashboardActiveInstances = new Map<string, HomeView>();
   private static dashboardStateListeners = new Map<string, (isActive: boolean) => void>();
   
   private config?: any;
@@ -26,9 +26,9 @@ export class AppleHomeView extends HTMLElement {
   private _config?: any;
   private content?: HTMLElement;
   // Targeted event routing: entity_id -> cards that render it.
-  private entityCardIndex: Map<string, Set<AppleHomeCard>> = new Map();
+  private entityCardIndex: Map<string, Set<HomeCard>> = new Map();
   // Cards that must receive every hass update regardless of state diff (cameras).
-  private alwaysUpdateCards: Set<AppleHomeCard> = new Set();
+  private alwaysUpdateCards: Set<HomeCard> = new Set();
   // Set true whenever this.content's card DOM changes; triggers a lazy index rebuild.
   private indexDirty: boolean = true;
   private contentMutationObserver?: MutationObserver;
@@ -36,7 +36,7 @@ export class AppleHomeView extends HTMLElement {
   private _isTransitioning = false; // Add transition state
   private _lastRenderTime = 0; // Track when last render happened
   private _modeSwitchDebounce: number | null = null; // Prevent rapid mode switching
-  private chipsElement?: AppleChips;
+  private chipsElement?: HomeChips;
   private visibilityChangeHandler?: () => void; // Add visibility change handler
   private globalRefreshHandler?: (event: Event) => void; // Add global refresh handler
   private currentDashboardKey: string = 'default'; // Track current dashboard key
@@ -55,15 +55,15 @@ export class AppleHomeView extends HTMLElement {
     return dashboardMatch && dashboardMatch[1] ? dashboardMatch[1] : 'default';
   }
   
-  private getCurrentActiveInstance(): AppleHomeView | undefined {
-    return AppleHomeView.dashboardActiveInstances.get(this.currentDashboardKey);
+  private getCurrentActiveInstance(): HomeView | undefined {
+    return HomeView.dashboardActiveInstances.get(this.currentDashboardKey);
   }
   
-  private setCurrentActiveInstance(instance: AppleHomeView | undefined): void {
+  private setCurrentActiveInstance(instance: HomeView | undefined): void {
     if (instance) {
-      AppleHomeView.dashboardActiveInstances.set(this.currentDashboardKey, instance);
+      HomeView.dashboardActiveInstances.set(this.currentDashboardKey, instance);
     } else {
-      AppleHomeView.dashboardActiveInstances.delete(this.currentDashboardKey);
+      HomeView.dashboardActiveInstances.delete(this.currentDashboardKey);
     }
   }
   
@@ -78,7 +78,7 @@ export class AppleHomeView extends HTMLElement {
   private customizationManager: CustomizationManager;
   private cardManager: CardManager;
   private editModeManager: EditModeManager;
-  private appleHeader: AppleHeader;
+  private appleHeader: HomeHeader;
   private refreshCallback: () => void;
   private dragAndDropManager: DragAndDropManager;
 
@@ -97,7 +97,7 @@ export class AppleHomeView extends HTMLElement {
     this.editModeManager = new EditModeManager((editMode) => this.handleEditModeChange(editMode));
     
     // Create instance-specific header (NO SINGLETON!) and pass editModeManager
-    this.appleHeader = new AppleHeader(true);
+    this.appleHeader = new HomeHeader(true);
     this.appleHeader.setEditModeManager(this.editModeManager);
     this.appleHeader.addRefreshCallback(this.refreshCallback);
     
@@ -140,7 +140,7 @@ export class AppleHomeView extends HTMLElement {
         this.handleGlobalRefresh(customEvent.detail.customizations);
       }
     };
-    document.addEventListener('apple-home-dashboard-refresh', this.globalRefreshHandler);
+    document.addEventListener('hg-dashboard-refresh', this.globalRefreshHandler);
     
     // Set up registry subscription manager for automatic updates
     this.setupRegistrySubscriptions();
@@ -166,7 +166,7 @@ export class AppleHomeView extends HTMLElement {
       document.removeEventListener('visibilitychange', this.visibilityChangeHandler);
     }
     if (this.globalRefreshHandler) {
-      document.removeEventListener('apple-home-dashboard-refresh', this.globalRefreshHandler);
+      document.removeEventListener('hg-dashboard-refresh', this.globalRefreshHandler);
     }
 
     // Stop watching content for card DOM changes
@@ -219,7 +219,7 @@ export class AppleHomeView extends HTMLElement {
       await this.renderPage('globalRefresh');
       
     } catch (error) {
-      console.error('🏠 APPLE HOME: Error during global refresh:', error);
+      console.error('Home Glass: Error during global refresh:', error);
     }
   }
 
@@ -377,7 +377,7 @@ export class AppleHomeView extends HTMLElement {
     const parentGrid = wrapper.closest('.area-entities') as HTMLElement;
 
     // Cleanup the card's resources before removing
-    const card = wrapper.querySelector('apple-home-card') as any;
+    const card = wrapper.querySelector('home-glass-card') as any;
     if (card && typeof card.cleanup === 'function') card.cleanup();
 
     wrapper.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
@@ -552,7 +552,7 @@ export class AppleHomeView extends HTMLElement {
     
     // Always ensure Apple Home header exists and is properly configured
     
-    // Configure header based on page type - direct to AppleHeader
+    // Configure header based on page type - direct to HomeHeader
     if (!isGroupPage && !isSpecialPage) {
       // Home page: configure header for home (show menu, use home title)
       const homeConfig: HeaderConfig = {
@@ -570,7 +570,7 @@ export class AppleHomeView extends HTMLElement {
       
       // Set appropriate title and back button based on page type
       if (this.config.pageType === 'room') {
-        // For room pages, use config.title (which should be the room name from apple-home-strategy.ts)
+        // For room pages, use config.title (which should be the room name from hg-strategy.ts)
         // This matches how group pages work - they just use config.title directly
         pageTitle = this.config.title || localize('pages.default_room');
         showBackButton = true;
@@ -728,7 +728,7 @@ export class AppleHomeView extends HTMLElement {
       }
       
     } catch (error) {
-      console.error('🏠 APPLE HOME: Error loading customizations:', error);
+      console.error('Home Glass: Error loading customizations:', error);
     }
   }
 
@@ -788,7 +788,7 @@ export class AppleHomeView extends HTMLElement {
     
     // Remove only dynamic content, keep permanent elements (header, chips) in place
     if (this.content) {
-      const permanentSelectors = ['.apple-home-header.permanent-header', '.permanent-chips'];
+      const permanentSelectors = ['.hg-header.permanent-header', '.permanent-chips'];
       Array.from(this.content.children).forEach(child => {
         const isPermanent = permanentSelectors.some(sel => child.matches(sel));
         if (!isPermanent) child.remove();
@@ -796,7 +796,7 @@ export class AppleHomeView extends HTMLElement {
 
       const permanentChips = this.content.querySelector('.permanent-chips') as HTMLElement;
       if (permanentChips) {
-        this.chipsElement = new AppleChips(permanentChips, this.customizationManager);
+        this.chipsElement = new HomeChips(permanentChips, this.customizationManager);
         this.setupChipsCallback();
       }
     }
@@ -840,7 +840,7 @@ export class AppleHomeView extends HTMLElement {
             position: relative;
             /* Enable container queries - responds to available space, not screen */
             container-type: inline-size;
-            container-name: apple-home-view;
+            container-name: home-glass-view;
             /* Local variables - only for values that need container-specific overrides */
             --card-gap: var(--apple-card-gap, 10px);
             --section-margin: var(--apple-section-gap, 20px);
@@ -895,7 +895,7 @@ export class AppleHomeView extends HTMLElement {
           }
 
           /* Special section titles (Scenes, Cameras) */
-          .apple-home-section-title {
+          .hg-section-title {
             font-size: var(--apple-section-title-size, 17px);
             font-weight: 600;
             color: #fff;
@@ -924,8 +924,8 @@ export class AppleHomeView extends HTMLElement {
           }
 
           /* Special section titles (Scenes, Cameras) */
-          .permanent-chips + .apple-home-section-title, .permanent-chips + .area-title,
-          .apple-status-section + .apple-home-section-title,
+          .permanent-chips + .hg-section-title, .permanent-chips + .area-title,
+          .apple-status-section + .hg-section-title,
           .apple-status-section + .area-title {
             margin: 12px 0 6px;
           }
@@ -1007,49 +1007,49 @@ export class AppleHomeView extends HTMLElement {
           }
 
           /* Apple-style camera card border radius - handled at element level */
-          .carousel-grid.cameras .entity-card-wrapper apple-home-card {
+          .carousel-grid.cameras .entity-card-wrapper home-glass-card {
             overflow: hidden;
           }
 
-          /* Default border radius for all apple-home-card elements */
-          apple-home-card {
+          /* Default border radius for all home-glass-card elements */
+          home-glass-card {
             border-radius: var(--apple-card-radius, 25px);
             overflow: hidden;
           }
 
           /* Camera carousel: remove border radius from middle cards */
-          .carousel-grid.cameras .entity-card-wrapper apple-home-card {
+          .carousel-grid.cameras .entity-card-wrapper home-glass-card {
             border-radius: 0;
           }
 
           /* Camera carousel: first card gets left rounded corners */
-          .carousel-grid.cameras .entity-card-wrapper:first-child apple-home-card {
+          .carousel-grid.cameras .entity-card-wrapper:first-child home-glass-card {
             border-radius: var(--apple-card-radius, 25px) 0 0 var(--apple-card-radius, 25px);
           }
 
           /* Camera carousel: last card gets right rounded corners */
-          .carousel-grid.cameras .entity-card-wrapper:last-child apple-home-card {
+          .carousel-grid.cameras .entity-card-wrapper:last-child home-glass-card {
             border-radius: 0 var(--apple-card-radius, 25px) var(--apple-card-radius, 25px) 0;
           }
 
           /* Camera carousel: single card gets full rounded corners */
-          .carousel-grid.cameras .entity-card-wrapper:first-child:last-child apple-home-card {
+          .carousel-grid.cameras .entity-card-wrapper:first-child:last-child home-glass-card {
             border-radius: var(--apple-card-radius, 25px);
           }
 
           /* RTL Support for camera carousel border-radius */
-          .wrapper-content.rtl .carousel-grid.cameras .entity-card-wrapper:first-child apple-home-card {
+          .wrapper-content.rtl .carousel-grid.cameras .entity-card-wrapper:first-child home-glass-card {
             border-radius: 0 var(--apple-card-radius, 25px) var(--apple-card-radius, 25px) 0; /* Right rounded corners in RTL */
           }
 
-          .wrapper-content.rtl .carousel-grid.cameras .entity-card-wrapper:last-child apple-home-card {
+          .wrapper-content.rtl .carousel-grid.cameras .entity-card-wrapper:last-child home-glass-card {
             border-radius: var(--apple-card-radius, 25px) 0 0 var(--apple-card-radius, 25px); /* Left rounded corners in RTL */
           }
 
           /* Ensure edit mode works properly with carousels */
           .carousel-grid .entity-card-wrapper.edit-mode {
             transition: transform 0.2s ease, opacity 0.2s ease;
-            animation: apple-home-shake 1.3s ease-in-out infinite;
+            animation: hg-shake 1.3s ease-in-out infinite;
             touch-action: none;
           }
 
@@ -1074,7 +1074,7 @@ export class AppleHomeView extends HTMLElement {
             justify-content: center;
           }
           /* Force weather card to stack its inner layout when in the row at medium widths */
-          @container apple-home-view (max-width: 1100px) {
+          @container home-glass-view (max-width: 1100px) {
             .weather-energy-row .weather-card-inner {
               flex-direction: column;
               gap: 10px;
@@ -1086,7 +1086,7 @@ export class AppleHomeView extends HTMLElement {
               border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             }
           }
-          @container apple-home-view (max-width: 755px) {
+          @container home-glass-view (max-width: 755px) {
             .weather-energy-row {
               flex-direction: column;
             }
@@ -1106,7 +1106,7 @@ export class AppleHomeView extends HTMLElement {
               border-bottom: none;
             }
           }
-          @container apple-home-view (max-width: 555px) {
+          @container home-glass-view (max-width: 555px) {
             .weather-energy-row .weather-card-inner {
               flex-direction: column;
               gap: 10px;
@@ -1181,7 +1181,7 @@ export class AppleHomeView extends HTMLElement {
           
           .entity-card-wrapper.edit-mode {
             transition: transform 0.2s ease, opacity 0.2s ease;
-            animation: apple-home-shake 1.3s ease-in-out infinite;
+            animation: hg-shake 1.3s ease-in-out infinite;
             touch-action: none; /* Prevent default touch behaviors for drag */
           }
           
@@ -1189,12 +1189,12 @@ export class AppleHomeView extends HTMLElement {
           @media (hover: none) and (pointer: coarse) {
             .entity-card-wrapper.edit-mode {
               /* Stronger visual feedback for touch */
-              animation: apple-home-shake 1.8s ease-in-out infinite;
+              animation: hg-shake 1.8s ease-in-out infinite;
               touch-action: none;
             }
           }
           
-          @keyframes apple-home-shake {
+          @keyframes hg-shake {
             0%, 100% { transform: translateX(0px) rotate(0deg); }
             10% { transform: translateX(-1px) rotate(-0.6deg); }
             20% { transform: translateX(1px) rotate(0.6deg); }
@@ -1380,7 +1380,7 @@ export class AppleHomeView extends HTMLElement {
              6 columns layout - like Apple Home on large screens
              Uses container query - responds to available space!
              ============================================ */
-          @container apple-home-view (min-width: 1356px) {
+          @container home-glass-view (min-width: 1356px) {
             .entity-card-wrapper,
             .room-group-grid .entity-card-wrapper,
             .scenes-grid .entity-card-wrapper,
@@ -1411,7 +1411,7 @@ export class AppleHomeView extends HTMLElement {
              LARGE CONTAINER (1056-1355px container = 1100-1399px viewport)
              4 columns layout
              ============================================ */
-          @container apple-home-view (min-width: 1056px) and (max-width: 1355px) {
+          @container home-glass-view (min-width: 1056px) and (max-width: 1355px) {
             .entity-card-wrapper,
             .room-group-grid .entity-card-wrapper,
             .scenes-grid .entity-card-wrapper,
@@ -1442,7 +1442,7 @@ export class AppleHomeView extends HTMLElement {
              MEDIUM CONTAINER (756-1055px container = 800-1099px viewport)
              4 columns layout - good for tablet landscape
              ============================================ */
-          @container apple-home-view (min-width: 756px) and (max-width: 1055px) {
+          @container home-glass-view (min-width: 756px) and (max-width: 1055px) {
             .wrapper-content {
               --card-gap: 10px;
             }
@@ -1477,7 +1477,7 @@ export class AppleHomeView extends HTMLElement {
              TABLET CONTAINER (556-755px container = 600-799px viewport)
              3 columns layout
              ============================================ */
-          @container apple-home-view (min-width: 556px) and (max-width: 755px) {
+          @container home-glass-view (min-width: 556px) and (max-width: 755px) {
             .wrapper-content {
               --card-gap: 10px;
             }
@@ -1512,7 +1512,7 @@ export class AppleHomeView extends HTMLElement {
              MOBILE CONTAINER (356-555px container = 400-599px viewport)
              2 columns layout
              ============================================ */
-          @container apple-home-view (min-width: 356px) and (max-width: 555px) {
+          @container home-glass-view (min-width: 356px) and (max-width: 555px) {
             .wrapper-content {
               --card-gap: 10px;
               --section-margin: 18px;
@@ -1575,7 +1575,7 @@ export class AppleHomeView extends HTMLElement {
              SMALL CONTAINER (316-355px container = 360-399px viewport)
              2 columns but smaller cards
              ============================================ */
-          @container apple-home-view (min-width: 316px) and (max-width: 355px) {
+          @container home-glass-view (min-width: 316px) and (max-width: 355px) {
             .wrapper-content {
               --card-gap: 8px;
               --section-margin: 16px;
@@ -1586,7 +1586,7 @@ export class AppleHomeView extends HTMLElement {
             }
             
             .area-title,
-            .apple-home-section-title,
+            .hg-section-title,
             .room-group-title {
               font-size: 16px;
               margin-top: 16px;
@@ -1623,7 +1623,7 @@ export class AppleHomeView extends HTMLElement {
              Single column layout - like Apple Home
              Also triggered by very narrow containers
              ============================================ */
-          @container apple-home-view (max-width: 315px) {
+          @container home-glass-view (max-width: 315px) {
             .wrapper-content {
               --card-gap: 8px;
               --section-margin: 14px;
@@ -1634,7 +1634,7 @@ export class AppleHomeView extends HTMLElement {
             }
             
             .area-title,
-            .apple-home-section-title,
+            .hg-section-title,
             .room-group-title {
               font-size: 15px;
               margin-top: 14px;
@@ -1683,7 +1683,7 @@ export class AppleHomeView extends HTMLElement {
             }
             
             .area-title,
-            .apple-home-section-title,
+            .hg-section-title,
             .room-group-title {
               font-size: 15px;
               margin-top: 14px;
@@ -1741,7 +1741,7 @@ export class AppleHomeView extends HTMLElement {
             }
             
             .area-title,
-            .apple-home-section-title,
+            .hg-section-title,
             .room-group-title {
               font-size: 16px;
             }
@@ -1754,7 +1754,7 @@ export class AppleHomeView extends HTMLElement {
         </style>
         <div class="wrapper-content ${RTLHelper.isRTL() ? 'rtl' : 'ltr'}">
           <div class="page-content">
-            <div class="apple-home-header permanent-header"></div>
+            <div class="hg-header permanent-header"></div>
             <div class="permanent-chips"></div>
           </div>
         </div>
@@ -1769,7 +1769,7 @@ export class AppleHomeView extends HTMLElement {
     if (!this.chipsElement) {
       const chipsContainer = this.content.querySelector('.permanent-chips') as HTMLElement;
       if (chipsContainer) {
-        this.chipsElement = new AppleChips(chipsContainer, this.customizationManager);
+        this.chipsElement = new HomeChips(chipsContainer, this.customizationManager);
         this.setupChipsCallback();
       } else {
       }
@@ -1793,9 +1793,9 @@ export class AppleHomeView extends HTMLElement {
       this.indexDirty = false;
       return;
     }
-    const cards = this.content.querySelectorAll('apple-home-card');
+    const cards = this.content.querySelectorAll('home-glass-card');
     cards.forEach((el) => {
-      const card = el as AppleHomeCard;
+      const card = el as HomeCard;
       if (card.needsContinuousHass) {
         this.alwaysUpdateCards.add(card);
         return;
@@ -1804,7 +1804,7 @@ export class AppleHomeView extends HTMLElement {
       if (!id) return;
       let set = this.entityCardIndex.get(id);
       if (!set) {
-        set = new Set<AppleHomeCard>();
+        set = new Set<HomeCard>();
         this.entityCardIndex.set(id, set);
       }
       set.add(card);
@@ -1893,7 +1893,7 @@ export class AppleHomeView extends HTMLElement {
     } else {
       // Steady hot path: touch only cards whose entity changed this push.
       const changedIds = this.computeChangedEntityIds(oldHass, newHass);
-      const updated = new Set<AppleHomeCard>();
+      const updated = new Set<HomeCard>();
       for (const id of changedIds) {
         const cards = this.entityCardIndex.get(id);
         if (!cards) continue;
@@ -1930,7 +1930,7 @@ export class AppleHomeView extends HTMLElement {
     // Handle drag and drop for different page types
     if (this.config?.pageType === 'room') {
       // For room pages, use the main drag and drop manager (same as home page)
-      // Room pages now let AppleHomeView handle drag and drop like other sections
+      // Room pages now let HomeView handle drag and drop like other sections
       if (editMode) {
         // Enable drag and drop with a small delay to ensure cards are rendered
         setTimeout(() => {
@@ -1941,7 +1941,7 @@ export class AppleHomeView extends HTMLElement {
             const element = wrapper as HTMLElement;
             element.classList.toggle('edit-mode', true);
             
-            const appleHomeCard = element.querySelector('apple-home-card') as any;
+            const appleHomeCard = element.querySelector('home-glass-card') as any;
             if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
               appleHomeCard.refreshEditMode();
             }
@@ -1955,7 +1955,7 @@ export class AppleHomeView extends HTMLElement {
           const element = wrapper as HTMLElement;
           element.classList.toggle('edit-mode', false);
         
-          const appleHomeCard = element.querySelector('apple-home-card') as any;
+          const appleHomeCard = element.querySelector('home-glass-card') as any;
           if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
             appleHomeCard.refreshEditMode();
           }
@@ -1987,7 +1987,7 @@ export class AppleHomeView extends HTMLElement {
             const element = wrapper as HTMLElement;
             element.classList.toggle('edit-mode', true);
             
-            const appleHomeCard = element.querySelector('apple-home-card') as any;
+            const appleHomeCard = element.querySelector('home-glass-card') as any;
             if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
               appleHomeCard.refreshEditMode();
             }
@@ -2002,7 +2002,7 @@ export class AppleHomeView extends HTMLElement {
           const element = wrapper as HTMLElement;
           element.classList.toggle('edit-mode', false);
         
-          const appleHomeCard = element.querySelector('apple-home-card') as any;
+          const appleHomeCard = element.querySelector('home-glass-card') as any;
           if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
             appleHomeCard.refreshEditMode();
           }
@@ -2267,7 +2267,7 @@ export class AppleHomeView extends HTMLElement {
     if (!this.chipsElement && this.content) {
       const chipsContainer = this.content.querySelector('.permanent-chips') as HTMLElement;
       if (chipsContainer) {
-        this.chipsElement = new AppleChips(chipsContainer, this.customizationManager);
+        this.chipsElement = new HomeChips(chipsContainer, this.customizationManager);
         this.setupChipsCallback();
       }
     }
@@ -2290,7 +2290,7 @@ export class AppleHomeView extends HTMLElement {
     if (!this.chipsElement && this.content) {
       const chipsContainer = this.content.querySelector('.permanent-chips') as HTMLElement;
       if (chipsContainer) {
-        this.chipsElement = new AppleChips(chipsContainer, this.customizationManager);
+        this.chipsElement = new HomeChips(chipsContainer, this.customizationManager);
       }
     }
     
@@ -2397,7 +2397,7 @@ export class AppleHomeView extends HTMLElement {
     wrapper.classList.toggle('tall', shouldBeTall);
     
     // Update the card's design class
-    const cardElement = wrapper.querySelector('apple-home-card') as any;
+    const cardElement = wrapper.querySelector('home-glass-card') as any;
     if (cardElement) {
       // Update the card's configuration
       const currentConfig = cardElement.config || {};
@@ -2419,9 +2419,9 @@ export class AppleHomeView extends HTMLElement {
   }
 
   private cleanupCameras() {
-    // Find all apple-home-card elements and cleanup their cameras
+    // Find all home-glass-card elements and cleanup their cameras
     if (this.content) {
-      const cards = this.content.querySelectorAll('apple-home-card');
+      const cards = this.content.querySelectorAll('home-glass-card');
       cards.forEach((card: any) => {
         if (card && typeof card.cleanup === 'function') {
           card.cleanup();
@@ -2431,9 +2431,9 @@ export class AppleHomeView extends HTMLElement {
   }
 
   private pauseCameras() {
-    // Find all apple-home-card elements and pause their cameras
+    // Find all home-glass-card elements and pause their cameras
     if (this.content) {
-      const cards = this.content.querySelectorAll('apple-home-card');
+      const cards = this.content.querySelectorAll('home-glass-card');
       cards.forEach((card: any) => {
         if (card && typeof card.pauseCamera === 'function') {
           card.pauseCamera();
@@ -2443,9 +2443,9 @@ export class AppleHomeView extends HTMLElement {
   }
 
   private resumeCameras() {
-    // Find all apple-home-card elements and resume their cameras
+    // Find all home-glass-card elements and resume their cameras
     if (this.content) {
-      const cards = this.content.querySelectorAll('apple-home-card');
+      const cards = this.content.querySelectorAll('home-glass-card');
       cards.forEach((card: any) => {
         if (card && typeof card.resumeCamera === 'function') {
           card.resumeCamera();
@@ -2620,9 +2620,9 @@ export class AppleHomeView extends HTMLElement {
     const domain = entityId.split('.')[0];
     const friendlyName = state.attributes?.friendly_name || entityId.split('.')[1].replace(/_/g, ' ');
 
-    const cardElement = document.createElement('apple-home-card') as any;
+    const cardElement = document.createElement('home-glass-card') as any;
     cardElement.setConfig({
-      type: 'custom:apple-home-card',
+      type: 'custom:home-glass-card',
       entity: entityId,
       name: friendlyName,
       domain: domain,
@@ -2662,7 +2662,7 @@ export class AppleHomeView extends HTMLElement {
     if (!favGrid) {
       // Create the favorites section
       const titleDiv = document.createElement('div');
-      titleDiv.className = 'apple-home-section-title';
+      titleDiv.className = 'hg-section-title';
       titleDiv.innerHTML = `<span>${localize('section_titles.favorites')}</span>`;
 
       favGrid = document.createElement('div');
@@ -2670,7 +2670,7 @@ export class AppleHomeView extends HTMLElement {
       favGrid.dataset.areaId = 'favorites';
 
       // Insert at top of content (after header and chips)
-      const firstSection = this.content.querySelector('.apple-home-section-title, .area-title');
+      const firstSection = this.content.querySelector('.hg-section-title, .area-title');
       if (firstSection) {
         this.content.insertBefore(favGrid, firstSection);
         this.content.insertBefore(titleDiv, favGrid);
@@ -2686,9 +2686,9 @@ export class AppleHomeView extends HTMLElement {
     const domain = entityId.split('.')[0];
     const friendlyName = state.attributes?.friendly_name || entityId.split('.')[1].replace(/_/g, ' ');
 
-    const cardElement = document.createElement('apple-home-card') as any;
+    const cardElement = document.createElement('home-glass-card') as any;
     cardElement.setConfig({
-      type: 'custom:apple-home-card',
+      type: 'custom:home-glass-card',
       entity: entityId,
       name: friendlyName,
       domain: domain,

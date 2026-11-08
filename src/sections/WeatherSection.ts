@@ -614,7 +614,7 @@ export class WeatherSection {
       }
 
       /* ========== RESPONSIVE: stacked on mobile ========== */
-      @container apple-home-view (max-width: 555px) {
+      @container home-glass-view (max-width: 555px) {
         .apple-weather-card {
           width: 100%;
           max-height: calc(100svh - 170px);
@@ -687,7 +687,7 @@ export class WeatherSection {
         }
       }
 
-      @container apple-home-view (max-width: 355px) {
+      @container home-glass-view (max-width: 355px) {
         .weather-clock-time {
           font-size: 32px;
         }

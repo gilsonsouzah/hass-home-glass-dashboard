@@ -1,16 +1,15 @@
 {
-  "name": "apple-home-dashboard",
-  "version": "1.4.2",
-  "description": "Apple Home-inspired dashboard strategy for Home Assistant",
-  "main": "apple-home-dashboard.js",
+  "name": "hass-home-glass-dashboard",
+  "version": "2.0.0",
+  "description": "iOS 26 Liquid Glass style dashboard strategy for Home Assistant",
+  "main": "custom_components/home_glass/frontend/home-glass-dashboard.js",
   "scripts": {
     "build": "webpack",
     "build:dev": "webpack --mode=development --watch",
-    "deploy": "./deploy.sh",
     "lint": "eslint \"src/**/*.{ts,js}\"",
     "lint:fix": "eslint --fix \"src/**/*.{ts,js}\"",
     "format": "prettier --write \"**/*.{ts,js,json,css,md,yml,yaml}\"",
-    "bump": "bump --preid alpha package.json README.md ./src/apple-home-strategy.ts"
+    "typecheck": "tsc --noEmit -p ."
   },
   "keywords": [
     "home-assistant",

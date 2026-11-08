@@ -1951,13 +1951,13 @@ export class EnergySection {
       }
 
       /* ========== RESPONSIVE ========== */
-      @container apple-home-view (max-width: 755px) {
+      @container home-glass-view (max-width: 755px) {
         .energy-flow-grid {
           grid-template-columns: 1fr;
         }
       }
 
-      @container apple-home-view (max-width: 555px) {
+      @container home-glass-view (max-width: 555px) {
         .apple-energy-card {
           width: 100%;
         }
@@ -1996,7 +1996,7 @@ export class EnergySection {
         }
       }
 
-      @container apple-home-view (max-width: 355px) {
+      @container home-glass-view (max-width: 355px) {
         .energy-current-power {
           font-size: 28px;
         }

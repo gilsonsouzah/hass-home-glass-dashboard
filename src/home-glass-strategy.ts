@@ -10,8 +10,8 @@
  */
 
 import { DashboardConfig, DeviceGroup } from './config/DashboardConfig';
-import { AppleHomeCard } from './components/AppleHomeCard';
-import { AppleHomeView } from './components/AppleHomeView';
+import { HomeCard } from './components/HomeCard';
+import { HomeView } from './components/HomeView';
 import { CustomizationManager } from './utils/CustomizationManager';
 import { setupLocalize, localize } from './utils/LocalizationService';
 import { BackgroundManager } from './utils/BackgroundManager';
@@ -102,7 +102,7 @@ async function generateLovelaceDashboard(info: { hass: any; narrow?: boolean }, 
     panel: true,
     cards: [
       {
-        type: 'custom:apple-home-view',
+        type: 'custom:home-glass-view',
         title: homeTitle,
         pageType: 'home',
         customizations: customizations,
@@ -128,7 +128,7 @@ async function generateLovelaceDashboard(info: { hass: any; narrow?: boolean }, 
       subview: true,
       cards: [
         {
-          type: 'custom:apple-home-view',
+          type: 'custom:home-glass-view',
           title: groupName,
           pageType: 'group',
           deviceGroup: group,
@@ -147,7 +147,7 @@ async function generateLovelaceDashboard(info: { hass: any; narrow?: boolean }, 
     subview: true,
     cards: [
       {
-        type: 'custom:apple-home-view',
+        type: 'custom:home-glass-view',
         title: localize('pages.scenes'),
         pageType: 'scenes',
         customizations: customizations,
@@ -163,7 +163,7 @@ async function generateLovelaceDashboard(info: { hass: any; narrow?: boolean }, 
     subview: true,
     cards: [
       {
-        type: 'custom:apple-home-view',
+        type: 'custom:home-glass-view',
         title: localize('pages.cameras'),
         pageType: 'cameras',
         customizations: customizations,
@@ -184,7 +184,7 @@ async function generateLovelaceDashboard(info: { hass: any; narrow?: boolean }, 
         subview: true,
         cards: [
           {
-            type: 'custom:apple-home-view',
+            type: 'custom:home-glass-view',
             title: area.name,
             pageType: 'room',
             areaId: area.area_id,
@@ -205,7 +205,7 @@ async function generateLovelaceDashboard(info: { hass: any; narrow?: boolean }, 
  * Strategy Class - Required by Home Assistant for proper strategy registration
  * This follows the Home Assistant strategy pattern exactly like mushroom-strategy
  */
-class AppleHomeStrategy extends HTMLElement {
+class HomeGlassStrategy extends HTMLElement {
   /**
    * Generate a dashboard configuration
    * Called by Home Assistant when creating a dashboard with this strategy
@@ -220,45 +220,28 @@ class AppleHomeStrategy extends HTMLElement {
 }
 
 // Register custom elements (components still work exactly the same)
-if (!customElements.get('apple-home-card')) {
-  customElements.define('apple-home-card', AppleHomeCard);
+if (!customElements.get('home-glass-card')) {
+  customElements.define('home-glass-card', HomeCard);
 }
-if (!customElements.get('apple-home-view')) {
-  customElements.define('apple-home-view', AppleHomeView);
-}
-
-// Register the strategy element with Home Assistant.
-// Dashboard strategies are looked up as `ll-strategy-dashboard-<type>`; without
-// that tag Home Assistant fails with "Timeout waiting for strategy element
-// ll-strategy-dashboard-apple-home-strategy" and the dashboard never loads.
-// The unprefixed name is kept for older Home Assistant versions that still
-// resolve the legacy `ll-strategy-<type>` form.
-if (!customElements.get('ll-strategy-dashboard-apple-home-strategy')) {
-  customElements.define('ll-strategy-dashboard-apple-home-strategy', AppleHomeStrategy);
+if (!customElements.get('home-glass-view')) {
+  customElements.define('home-glass-view', HomeView);
 }
 
-if (!customElements.get('ll-strategy-apple-home-strategy')) {
-  customElements.define('ll-strategy-apple-home-strategy', class extends AppleHomeStrategy {});
+// HA resolves dashboard strategies as `ll-strategy-dashboard-<type>` (legacy: `ll-strategy-<type>`).
+// `hg-strategy` stays registered so dashboards created with the original project keep working.
+for (const type of ['home-glass-strategy', 'apple-home-strategy']) {
+  for (const tag of [`ll-strategy-dashboard-${type}`, `ll-strategy-${type}`]) {
+    if (!customElements.get(tag)) {
+      customElements.define(tag, class extends HomeGlassStrategy {});
+    }
+  }
 }
 
-// Register the strategy with Home Assistant cards list
-if (window.customCards) {
-  window.customCards.push({
-    type: 'custom:apple-home-strategy',
-    name: 'Apple Home Strategy',
-    description: 'Apple Home-style dashboard strategy with stateless architecture',
-    preview: false,
-  });
-}
-
-// Register the strategy with Home Assistant
 window.customStrategies = window.customStrategies || [];
 window.customStrategies.push({
-  type: 'apple-home-strategy',
+  type: 'home-glass-strategy',
   strategyType: 'dashboard',
-  name: 'Apple Home Dashboard',
-  description: 'Apple Home-style dashboard auto-generated from your Home Assistant entities.',
-  documentationURL: 'https://github.com/nitaybz/apple-home-dashboard',
+  name: 'Home Glass',
+  description: 'iOS-style dashboard auto-generated from your Home Assistant areas and devices.',
+  documentationURL: 'https://github.com/gilsonsouzah/hass-home-glass-dashboard',
 });
-
-

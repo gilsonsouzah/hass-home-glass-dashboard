@@ -28,7 +28,7 @@ export class ScenesSection {
     
     // Add scenes section title with navigation
     const titleDiv = document.createElement('div');
-    titleDiv.className = 'apple-home-section-title';
+    titleDiv.className = 'hg-section-title';
     
     if (enableNavigation) {
       // Create clickable wrapper for just the title text and chevron
@@ -179,7 +179,7 @@ export class ScenesSection {
     const domain = entityId.split('.')[0];
     
     // Determine card type and properties
-    let cardType = 'custom:apple-home-card';
+    let cardType = 'custom:home-glass-card';
     let isTallCard = false;
     
     // Check if domain should be tall by default
@@ -218,8 +218,8 @@ export class ScenesSection {
     try {
       let cardElement: HTMLElement;
       
-      if (cardConfig.type === 'custom:apple-home-card') {
-        cardElement = document.createElement('apple-home-card') as HTMLElement;
+      if (cardConfig.type === 'custom:home-glass-card') {
+        cardElement = document.createElement('home-glass-card') as HTMLElement;
         
         // Determine if card should be tall based on customizations
         const shouldBeTall = this.cardManager.shouldCardBeTall(cardConfig.entity, container.dataset.areaId || 'unknown', context);

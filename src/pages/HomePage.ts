@@ -66,7 +66,7 @@ export class HomePage {
     onTallToggle?: (entityId: string, areaId: string) => void | Promise<void | boolean>
   ): Promise<void> {
     // Remove only dynamic content, keep permanent elements (header, chips) in place
-    const permanentSelectors = ['.apple-home-header', '.permanent-chips'];
+    const permanentSelectors = ['.hg-header', '.permanent-chips'];
     Array.from(container.children).forEach(child => {
       const isPermanent = permanentSelectors.some(sel => child.matches(sel));
       if (!isPermanent) child.remove();

@@ -140,7 +140,7 @@ export class DashboardStateManager {
   /**
    * Check if the current URL is within an Apple Home Dashboard
    */
-  private isCurrentUrlInAppleHomeDashboard(): { isInDashboard: boolean; dashboardKey: string | null } {
+  private isCurrentUrlInHomeGlassDashboard(): { isInDashboard: boolean; dashboardKey: string | null } {
     const currentKey = this.extractDashboardKey(window.location.pathname);
     
     if (!currentKey) {
@@ -250,7 +250,7 @@ export class DashboardStateManager {
     }
     this.lastProcessedPath = currentPath;
     
-    const { isInDashboard, dashboardKey } = this.isCurrentUrlInAppleHomeDashboard();
+    const { isInDashboard, dashboardKey } = this.isCurrentUrlInHomeGlassDashboard();
     
     if (isInDashboard && dashboardKey) {
       // We're in an Apple Home Dashboard

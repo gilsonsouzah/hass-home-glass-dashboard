@@ -99,7 +99,7 @@ export class BackgroundManager {
       }
     };
     
-    document.addEventListener('apple-home-dashboard-refresh', this.dashboardRefreshHandler);
+    document.addEventListener('hg-dashboard-refresh', this.dashboardRefreshHandler);
   }
 
   /**
@@ -119,7 +119,7 @@ export class BackgroundManager {
    * Clear any custom background styles from the document
    */
   static clearBackgrounds(): void {
-    const styleEl = document.querySelector('#apple-home-body-background');
+    const styleEl = document.querySelector('#hg-body-background');
     if (styleEl) {
       styleEl.remove();
     }
@@ -190,7 +190,7 @@ export class BackgroundManager {
     }
     
     // Remove any existing background style first
-    const existingStyle = document.querySelector('#apple-home-body-background');
+    const existingStyle = document.querySelector('#hg-body-background');
     if (existingStyle) {
       existingStyle.remove();
     }
@@ -198,7 +198,7 @@ export class BackgroundManager {
     // Create new style element for body background
     // Uses body::after pseudo-element for iOS Safari compatibility
     const styleElement = document.createElement('style');
-    styleElement.id = 'apple-home-body-background';
+    styleElement.id = 'hg-body-background';
     
     // HA 2026.11+ paints the theme background on partial-panel-resolver::before and
     // hui-view-background (z-index -1, isolated), which covers body::after.
@@ -324,7 +324,7 @@ export class BackgroundManager {
    * Remove background from document body
    */
   private removeBackground(): void {
-    const existingStyle = document.querySelector('#apple-home-body-background');
+    const existingStyle = document.querySelector('#hg-body-background');
     if (existingStyle) {
       existingStyle.remove();
     }
@@ -342,7 +342,7 @@ export class BackgroundManager {
     
     // Remove dashboard refresh event listener
     if (this.dashboardRefreshHandler) {
-      document.removeEventListener('apple-home-dashboard-refresh', this.dashboardRefreshHandler);
+      document.removeEventListener('hg-dashboard-refresh', this.dashboardRefreshHandler);
       this.dashboardRefreshHandler = undefined;
     }
     

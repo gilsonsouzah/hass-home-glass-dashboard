@@ -3,7 +3,7 @@ import { SectionReorderManager } from '../utils/SectionReorderManager';
 import { CustomizationManager } from '../utils/CustomizationManager';
 import { EditModeManager } from '../utils/EditModeManager';
 import { HomeSettingsManager } from '../utils/HomeSettingsManager';
-import { AppleChips, ChipsConfig } from './AppleChips';
+import { HomeChips, ChipsConfig } from './HomeChips';
 import { DeviceGroup } from '../config/DashboardConfig';
 import { EntityState } from '../types/types';
 import { localize } from '../utils/LocalizationService';
@@ -19,8 +19,8 @@ export interface HeaderConfig {
   chipsElement?: HTMLElement;
 }
 
-export class AppleHeader {
-  private static instance: AppleHeader | null = null;
+export class HomeHeader {
+  private static instance: HomeHeader | null = null;
   private headerElement?: HTMLElement;
   private titleElement?: HTMLElement;
   private scrolledTitleElement?: HTMLElement;
@@ -50,11 +50,11 @@ export class AppleHeader {
     this.uiManager = HomeAssistantUIManager.getInstance();
   }
 
-  static getInstance(): AppleHeader {
-    if (!AppleHeader.instance) {
-      AppleHeader.instance = new AppleHeader();
+  static getInstance(): HomeHeader {
+    if (!HomeHeader.instance) {
+      HomeHeader.instance = new HomeHeader();
     }
-    return AppleHeader.instance;
+    return HomeHeader.instance;
   }
 
   /**
@@ -203,10 +203,10 @@ export class AppleHeader {
       const headerChipsContainer = this.headerElement.querySelector('.apple-header-scrolled-chips') as HTMLElement;
 
       if (headerChipsContainer) {
-        // Create a new AppleChips instance for the header
+        // Create a new HomeChips instance for the header
 
         if (chipsElement.isConfigured && chipsElement.isConfigured() && chipsElement.hass) {
-          const headerChips = new AppleChips(headerChipsContainer, this.customizationManager);
+          const headerChips = new HomeChips(headerChipsContainer, this.customizationManager);
           headerChips.setConfig(chipsElement.getConfig());
           headerChips.hass = chipsElement.hass;
           headerChips.setActiveGroup(chipsElement.getActiveGroup());
@@ -383,7 +383,7 @@ export class AppleHeader {
     }
 
     // Check if we have a permanent header element to populate
-    const existingHeader = this.container.querySelector('.apple-home-header.permanent-header') as HTMLElement;
+    const existingHeader = this.container.querySelector('.hg-header.permanent-header') as HTMLElement;
 
     if (existingHeader) {
       // Populate the existing header element
@@ -456,7 +456,7 @@ export class AppleHeader {
     } else {
       // Create only the sticky header (no big title - that's handled by pages)
       const headerHTML = `
-        <div class="apple-home-header ${RTLHelper.isRTL() ? 'rtl' : 'ltr'}">
+        <div class="hg-header ${RTLHelper.isRTL() ? 'rtl' : 'ltr'}">
           <div class="apple-header-content">
             ${
               this.currentConfig.showBackButton
@@ -499,7 +499,7 @@ export class AppleHeader {
       this.container.insertAdjacentHTML('afterbegin', headerHTML);
 
       // Get reference to the created element
-      this.headerElement = this.container.querySelector('.apple-home-header') as HTMLElement;
+      this.headerElement = this.container.querySelector('.hg-header') as HTMLElement;
     }
 
     // Add RTL class handling to header element
@@ -1158,7 +1158,7 @@ export class AppleHeader {
         })
       );
     } catch (error) {
-      console.error('❌ AppleHeader: Error dispatching sidebar toggle event:', error);
+      console.error('❌ HomeHeader: Error dispatching sidebar toggle event:', error);
 
       // Fallback to manual approach if the event system fails
       this.openSidebarManually();
@@ -1178,19 +1178,19 @@ export class AppleHeader {
       // Find elements using the same method as HomeAssistantUIManager
       const homeAssistant = document.querySelector('home-assistant');
       if (!homeAssistant?.shadowRoot) {
-        console.warn('❌ AppleHeader: Home Assistant element not found in fallback');
+        console.warn('❌ HomeHeader: Home Assistant element not found in fallback');
         return;
       }
 
       const main = homeAssistant.shadowRoot.querySelector('home-assistant-main') as HTMLElement;
       if (!main?.shadowRoot) {
-        console.warn('❌ AppleHeader: Home Assistant main element not found in fallback');
+        console.warn('❌ HomeHeader: Home Assistant main element not found in fallback');
         return;
       }
 
       const drawer = main.shadowRoot.querySelector('ha-drawer') as any;
       if (!drawer) {
-        console.warn('❌ AppleHeader: HA drawer not found in fallback');
+        console.warn('❌ HomeHeader: HA drawer not found in fallback');
         return;
       }
 
@@ -1315,7 +1315,7 @@ export class AppleHeader {
         }
       }
     } catch (error) {
-      console.error('❌ AppleHeader: Error in manual sidebar opening:', error);
+      console.error('❌ HomeHeader: Error in manual sidebar opening:', error);
     }
   }
 
@@ -1634,7 +1634,7 @@ export class AppleHeader {
       ${liquidGlassCSS}
 
       /* Sticky header for home page, fixed for group pages */
-      .apple-home-header {
+      .hg-header {
         position: sticky;
         top: var(--ha-header-height, 0px);
         left: 0;
@@ -1648,13 +1648,13 @@ export class AppleHeader {
         min-height: 44px;
       }
 
-      .apple-home-header.rtl {
+      .hg-header.rtl {
         margin-left: 0;
         margin-right: calc(-1 * var(--apple-page-padding, 22px));
       }
 
       /* Fixed positioning for group pages to prevent jumping */
-      .apple-home-header.group-page {
+      .hg-header.group-page {
         position: fixed;
         top: 0;
         left: 0;
@@ -1664,18 +1664,18 @@ export class AppleHeader {
       }
 
       /* RTL fixed positioning for group pages */
-      .apple-home-header.group-page.rtl {
+      .hg-header.group-page.rtl {
         left: auto;
         right: 0;
         margin-left: 0;
         margin-right: 0;
       }
 
-      .apple-home-header.scrolled {
+      .hg-header.scrolled {
         background: transparent;
       }
 
-      .apple-home-header.scrolled::before {
+      .hg-header.scrolled::before {
         content: '';
         position: absolute;
         top: 0;
@@ -1722,17 +1722,17 @@ export class AppleHeader {
       }
 
       /* Fixed top position for group pages */
-      .apple-home-header.group-page .apple-header-back-button {
+      .hg-header.group-page .apple-header-back-button {
         top: 12px;
         transform: none;
       }
 
-      .apple-home-header.group-page .apple-header-back-button:active {
+      .hg-header.group-page .apple-header-back-button:active {
         transform: scale(0.95);
       }
 
       /* RTL positioning for group-page back button */
-      .apple-home-header.group-page.rtl .apple-header-back-button {
+      .hg-header.group-page.rtl .apple-header-back-button {
         left: auto;
         right: 16px;
         top: 12px;
@@ -1746,7 +1746,7 @@ export class AppleHeader {
         z-index: 2;
       }
 
-      .apple-home-header.rtl .apple-header-back-button {
+      .hg-header.rtl .apple-header-back-button {
         left: auto;
         right: 16px;
       }
@@ -1760,7 +1760,7 @@ export class AppleHeader {
           min-width: 34px;
         }
 
-        .apple-home-header.rtl .apple-header-back-button {
+        .hg-header.rtl .apple-header-back-button {
           left: auto;
           right: 12px;
         }
@@ -1785,23 +1785,23 @@ export class AppleHeader {
         z-index: 2;
       }
 
-      .apple-home-header.rtl .apple-header-sidebar-button {
+      .hg-header.rtl .apple-header-sidebar-button {
         left: auto !important;
         right: 16px !important;
       }
 
       /* Fixed top position for group pages */
-      .apple-home-header.group-page .apple-header-sidebar-button {
+      .hg-header.group-page .apple-header-sidebar-button {
         top: 13px;
         transform: none;
       }
 
-      .apple-home-header.group-page .apple-header-sidebar-button:active {
+      .hg-header.group-page .apple-header-sidebar-button:active {
         transform: scale(0.95);
       }
 
       /* RTL positioning for group-page sidebar button on desktop */
-      .apple-home-header.group-page.rtl .apple-header-sidebar-button {
+      .hg-header.group-page.rtl .apple-header-sidebar-button {
         left: auto !important;
         right: 16px !important;
       }
@@ -1815,18 +1815,18 @@ export class AppleHeader {
           min-width: 34px;
         }
 
-        .apple-home-header.group-page .apple-header-sidebar-button {
+        .hg-header.group-page .apple-header-sidebar-button {
           top: 13px;
         }
 
         /* RTL positioning for group-page sidebar button on mobile */
-        .apple-home-header.group-page.rtl .apple-header-sidebar-button {
+        .hg-header.group-page.rtl .apple-header-sidebar-button {
           left: auto !important;
           right: 12px !important;
           top: 10px;
         }
 
-        .apple-home-header.rtl .apple-header-sidebar-button {
+        .hg-header.rtl .apple-header-sidebar-button {
           left: auto !important;
           right: 12px !important;
         }
@@ -1845,7 +1845,7 @@ export class AppleHeader {
         justify-content: center;
       }
 
-      .apple-home-header.scrolled .apple-header-scrolled {
+      .hg-header.scrolled .apple-header-scrolled {
         opacity: 1;
         visibility: visible;
         pointer-events: auto;
@@ -1884,7 +1884,7 @@ export class AppleHeader {
       }
 
       /* Show chips in header only when scrolled */
-      .apple-home-header.scrolled .apple-header-scrolled-chips {
+      .hg-header.scrolled .apple-header-scrolled-chips {
         display: block;
       }
 
@@ -1903,24 +1903,24 @@ export class AppleHeader {
       }
 
       /* Fixed top position for group pages */
-      .apple-home-header.group-page .apple-header-menu-button {
+      .hg-header.group-page .apple-header-menu-button {
         top: 12px;
         transform: none;
       }
 
-      .apple-home-header.group-page .apple-header-menu-button:active {
+      .hg-header.group-page .apple-header-menu-button:active {
         transform: scale(0.97);
       }
 
       /* RTL positioning for group-page menu button */
-      .apple-home-header.group-page.rtl .apple-header-menu-button {
+      .hg-header.group-page.rtl .apple-header-menu-button {
         right: auto !important;
         left: 16px !important;
         top: 12px;
         transform: none;
       }
 
-      .apple-home-header.rtl .apple-header-menu-button {
+      .hg-header.rtl .apple-header-menu-button {
         right: auto !important;
         left: 16px !important;
       }
@@ -1934,7 +1934,7 @@ export class AppleHeader {
           min-width: 34px;
         }
 
-        .apple-home-header.rtl .apple-header-menu-button {
+        .hg-header.rtl .apple-header-menu-button {
           right: auto !important;
           left: 12px !important;
         }
@@ -2003,7 +2003,7 @@ export class AppleHeader {
         display: none;
       }
 
-      .apple-home-header.rtl .apple-header-dropdown {
+      .hg-header.rtl .apple-header-dropdown {
         right: auto;
         left: 10px;
       }
@@ -2101,15 +2101,15 @@ export class AppleHeader {
         color: rgba(255, 255, 255, 0.9);
       }
 
-      .apple-home-header.rtl .dropdown-item ha-icon {
+      .hg-header.rtl .dropdown-item ha-icon {
         order: 2;
       }
 
-      .apple-home-header.rtl .dropdown-item span {
+      .hg-header.rtl .dropdown-item span {
         order: 1;
       }
 
-      .apple-home-header.rtl .dropdown-item.room-item {
+      .hg-header.rtl .dropdown-item.room-item {
         padding-left: 20px;
         padding-right: 16px;
       }
@@ -2138,10 +2138,10 @@ export class AppleHeader {
       }
 
       /* Ensure proper text alignment for RTL text in LTR numeric contexts */
-      .apple-home-header.rtl .apple-header-content [data-numeric],
-      .apple-home-header.rtl .apple-header-content .numeric,
-      .apple-home-header.rtl .apple-header-content input[type="number"],
-      .apple-home-header.rtl .dropdown-item .number {
+      .hg-header.rtl .apple-header-content [data-numeric],
+      .hg-header.rtl .apple-header-content .numeric,
+      .hg-header.rtl .apple-header-content input[type="number"],
+      .hg-header.rtl .dropdown-item .number {
         text-align: left; /* Numbers should be left-aligned even in RTL */
       }
 
@@ -2174,12 +2174,12 @@ export class AppleHeader {
       /* Responsive - tablet */
       @media (max-width: 768px) {
 
-        .apple-home-header {
+        .hg-header {
           width: calc(100% + 32px);
           margin-left: -16px;
         }
 
-        .apple-home-header.group-page {
+        .hg-header.group-page {
           width: 100%;
           margin-left: 0;
         }
@@ -2200,7 +2200,7 @@ export class AppleHeader {
 
       /* Small mobile adjustments */
       @media (max-width: 479px) {
-        .apple-home-header {
+        .hg-header {
           width: calc(100% + 24px);
           margin-left: -12px;
         }
@@ -2218,7 +2218,7 @@ export class AppleHeader {
           right: 8px;
         }
 
-        .apple-home-header.rtl .apple-header-dropdown {
+        .hg-header.rtl .apple-header-dropdown {
           right: auto;
           left: 8px;
         }
@@ -2226,7 +2226,7 @@ export class AppleHeader {
 
       /* Extra small / accessibility */
       @media (max-width: 359px) {
-        .apple-home-header {
+        .hg-header {
           width: calc(100% + 20px);
           margin-left: -10px;
         }
@@ -2244,7 +2244,7 @@ export class AppleHeader {
           right: 6px;
         }
 
-        .apple-home-header.rtl .apple-header-dropdown {
+        .hg-header.rtl .apple-header-dropdown {
           right: auto;
           left: 6px;
         }
@@ -2261,7 +2261,7 @@ export class AppleHeader {
 
       /* Reduce motion for accessibility */
       @media (prefers-reduced-motion: reduce) {
-        .apple-home-header,
+        .hg-header,
         .apple-header-scrolled,
         .apple-header-dropdown,
         ha-drawer,
@@ -2388,7 +2388,7 @@ export class AppleHeader {
     }
 
     // Remove existing elements
-    this.container?.querySelector('.apple-home-header')?.remove();
+    this.container?.querySelector('.hg-header')?.remove();
     this.container?.querySelector('.apple-static-title')?.remove();
 
     // Remove fixed header padding class if it exists - container IS the page-content

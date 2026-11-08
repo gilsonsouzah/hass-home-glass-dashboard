@@ -3,11 +3,10 @@ const TerserPlugin = require('terser-webpack-plugin');
 
 module.exports = {
   mode: 'production',
-  entry: './src/apple-home-strategy.ts',
+  entry: './src/home-glass-strategy.ts',
   output: {
-    clean: true,
-    filename: 'apple-home-dashboard.js', // renamed to match repository name
-    path: path.resolve(__dirname, 'dist'),
+    filename: 'home-glass-dashboard.js',
+    path: path.resolve(__dirname, 'custom_components/home_glass/frontend'),
   },
   resolve: {
     extensions: ['.ts', '.js'],

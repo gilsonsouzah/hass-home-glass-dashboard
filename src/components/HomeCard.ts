@@ -4,7 +4,7 @@ import { CardConfig, EntityState } from '../types/types';
 import { localize } from '../utils/LocalizationService';
 import { RTLHelper } from '../utils/RTLHelper';
 
-export class AppleHomeCard extends HTMLElement {
+export class HomeCard extends HTMLElement {
   private config?: CardConfig;
   private _hass?: any;
   private entity?: string;
@@ -36,7 +36,7 @@ export class AppleHomeCard extends HTMLElement {
       // Use setTimeout to ensure shadowRoot content is ready after potential re-render
       setTimeout(() => {
         // Check if click handlers need to be re-attached
-        const card = this.shadowRoot?.querySelector('.apple-home-card') as HTMLElement;
+        const card = this.shadowRoot?.querySelector('.home-glass-card') as HTMLElement;
         const isEditMode = this.closest('.entity-card-wrapper')?.classList.contains('edit-mode') || false;
 
         // Only setup handlers if not in edit mode and card exists
@@ -63,7 +63,7 @@ export class AppleHomeCard extends HTMLElement {
     // Remove click event listeners and clear references
     // This allows connectedCallback to know handlers need to be re-attached
     if (this.shadowRoot) {
-      const card = this.shadowRoot.querySelector('.apple-home-card');
+      const card = this.shadowRoot.querySelector('.home-glass-card');
       const icon = this.shadowRoot.querySelector('.info-icon');
 
       if (card && this.boundCardClick) {
@@ -156,7 +156,7 @@ export class AppleHomeCard extends HTMLElement {
 
   /**
    * The single entity_id this card renders. Public accessor over the private
-   * `entity` field so AppleHomeView can index cards by entity without reflection.
+   * `entity` field so HomeView can index cards by entity without reflection.
    */
   get entityId(): string | undefined {
     return this.entity;
@@ -343,7 +343,7 @@ export class AppleHomeCard extends HTMLElement {
       <style>
         ${this.getCardStyles(entityData, isEditMode)}
       </style>
-      <div class="apple-home-card ${isEditMode ? 'edit-mode' : ''} ${this.domain === 'camera' && this.cameraView === 'snapshot' ? 'camera-card' : ''} ${RTLHelper.isRTL() ? 'rtl' : 'ltr'}">
+      <div class="home-glass-card ${isEditMode ? 'edit-mode' : ''} ${this.domain === 'camera' && this.cameraView === 'snapshot' ? 'camera-card' : ''} ${RTLHelper.isRTL() ? 'rtl' : 'ltr'}">
         <div class="card-info">
           ${iconElement}
           ${
@@ -680,7 +680,7 @@ export class AppleHomeCard extends HTMLElement {
   }
 
   private setupClickHandlers() {
-    const card = this.shadowRoot!.querySelector('.apple-home-card') as HTMLElement;
+    const card = this.shadowRoot!.querySelector('.home-glass-card') as HTMLElement;
     const icon = this.shadowRoot!.querySelector('.info-icon') as HTMLElement;
     const chevronUpBtn = this.shadowRoot!.querySelector('.chevron-up') as HTMLElement;
     const chevronDownBtn = this.shadowRoot!.querySelector('.chevron-down') as HTMLElement;
@@ -751,7 +751,7 @@ export class AppleHomeCard extends HTMLElement {
   // Public method to force re-render when edit mode changes
   public refreshEditMode() {
     const isEditMode = this.closest('.entity-card-wrapper')?.classList.contains('edit-mode') || false;
-      const card = this.shadowRoot?.querySelector('.apple-home-card');
+      const card = this.shadowRoot?.querySelector('.home-glass-card');
       if (card) {
         if (isEditMode) {
           card.classList.add('edit-mode');
@@ -825,7 +825,7 @@ export class AppleHomeCard extends HTMLElement {
         grid-row: span 2;
       }
 
-      .apple-home-card {
+      .home-glass-card {
         background: var(--card-bg-color);
         padding: var(--apple-card-padding, 10px);
         display: flex;
@@ -846,26 +846,26 @@ export class AppleHomeCard extends HTMLElement {
       }
 
       /* Regular Design Card Layout */
-      :host(.regular-design) .apple-home-card {
+      :host(.regular-design) .home-glass-card {
         justify-content: space-between;
       }
 
       /* Tall Design Card Layout */
-      :host(.tall-design) .apple-home-card {
+      :host(.tall-design) .home-glass-card {
         justify-content: flex-start;
       }
 
       /* Camera cards - no padding to allow full background */
-      :host(.tall-design) .apple-home-card.camera-card {
+      :host(.tall-design) .home-glass-card.camera-card {
         padding: 0;
       }
 
       /* Edit mode - disable interactions */
-      .apple-home-card.edit-mode {
+      .home-glass-card.edit-mode {
         cursor: default !important;
       }
 
-      .apple-home-card.edit-mode .info-icon {
+      .home-glass-card.edit-mode .info-icon {
         cursor: default !important;
       }
 
@@ -1178,32 +1178,32 @@ export class AppleHomeCard extends HTMLElement {
       }
 
       /* RTL Support for camera overlay positioning */
-      .apple-home-card.rtl .camera-overlay {
+      .home-glass-card.rtl .camera-overlay {
         left: auto;
         right: 10px;
       }
 
       /* RTL Support for camera icons positioning */
-      .apple-home-card.rtl .camera-icon-unavailable,
-      .apple-home-card.rtl .camera-icon-no-snapshot {
+      .home-glass-card.rtl .camera-icon-unavailable,
+      .home-glass-card.rtl .camera-icon-no-snapshot {
         left: auto;
         right: 10px;
       }
 
       /* RTL Support for text content alignment */
-      .apple-home-card.rtl .text-content {
+      .home-glass-card.rtl .text-content {
         text-align: right;
         direction: rtl;
       }
 
-      .apple-home-card.rtl .entity-name,
-      .apple-home-card.rtl .entity-state {
+      .home-glass-card.rtl .entity-name,
+      .home-glass-card.rtl .entity-state {
         text-align: right;
         direction: rtl;
       }
 
       /* RTL Support for camera text positioning */
-      .apple-home-card.rtl .camera-text {
+      .home-glass-card.rtl .camera-text {
         left: auto;
         right: 10px;
       }
@@ -1288,7 +1288,7 @@ export class AppleHomeCard extends HTMLElement {
       }
 
       /* Adjust card layout for cameras */
-      :host(.tall-design) .apple-home-card {
+      :host(.tall-design) .home-glass-card {
         padding: calc(var(--apple-card-padding, 10px) * 1.1);
       }
 

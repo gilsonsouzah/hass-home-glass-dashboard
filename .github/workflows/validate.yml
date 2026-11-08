@@ -1,19 +1,31 @@
-name: HACS validation
+name: Validate
+
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
-  schedule:
-    - cron: '0 0 * * *'
+
 jobs:
-  hacs:
-    name: HACS Action
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: HACS Action
-        uses: hacs/action@22.5.0
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          category: plugin
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test --if-present
+      - run: npm run build
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: home-assistant/actions/hassfest@master

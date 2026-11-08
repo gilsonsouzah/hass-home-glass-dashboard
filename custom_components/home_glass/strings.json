@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Home Glass Dashboard",
+        "description": "Registers the Home Glass dashboard strategy. After that, go to Settings → Dashboards → Add dashboard and pick **Home Glass**."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Home Glass Dashboard is already installed."
+    }
+  }
+}

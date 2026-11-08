@@ -29,7 +29,7 @@ export class EditModeManager {
         element.classList.add('edit-mode');
         
         // Force refresh of Apple Home cards to update edit mode
-        const appleHomeCard = element.querySelector('apple-home-card') as any;
+        const appleHomeCard = element.querySelector('home-glass-card') as any;
         if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
           appleHomeCard.refreshEditMode();
         }
@@ -37,7 +37,7 @@ export class EditModeManager {
         element.classList.remove('edit-mode');
         
         // Force refresh of Apple Home cards to update edit mode
-        const appleHomeCard = element.querySelector('apple-home-card') as any;
+        const appleHomeCard = element.querySelector('home-glass-card') as any;
         if (appleHomeCard && typeof appleHomeCard.refreshEditMode === 'function') {
           appleHomeCard.refreshEditMode();
         }
