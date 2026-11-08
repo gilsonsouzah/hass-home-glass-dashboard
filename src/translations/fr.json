@@ -140,7 +140,9 @@
     "home": "Accueil",
     "home_settings": "Paramètres de la Maison",
     "reorder_sections": "Réorganiser les Sections",
-    "choose_wallpaper": "Choisir le Fond d'Écran"
+    "choose_wallpaper": "Choisir le Fond d'Écran",
+    "menu": "Menu",
+    "remove": "Retirer"
   },
   "wallpaper_presets": {
     "default": "Défaut",
@@ -284,6 +286,8 @@
     "show_cost_description": "Affiche les montants du coût sur le tableau de bord énergie lorsqu'ils sont disponibles",
     "show_gas": "Afficher le Gaz",
     "show_gas_description": "Affiche la consommation de gaz sur l'écran d'accueil et le tableau de bord énergie lorsqu'elle est configurée",
+    "solid_surfaces": "Surfaces opaques (réduire la transparence)",
+    "solid_surfaces_description": "Remplace le verre par des surfaces opaques. Utile si le texte est difficile à lire sur le fond d'écran ou si l'appareil est lent.",
     "no_entities_found": "Aucune entité trouvée"
   },
   "status_messages": {

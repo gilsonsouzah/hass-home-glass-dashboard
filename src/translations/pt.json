@@ -140,7 +140,9 @@
     "home": "Casa",
     "home_settings": "Configurações da Casa",
     "reorder_sections": "Reordenar Seções",
-    "choose_wallpaper": "Escolher Papel de Parede"
+    "choose_wallpaper": "Escolher Papel de Parede",
+    "menu": "Menu",
+    "remove": "Remover"
   },
   "wallpaper_presets": {
     "default": "Padrão",
@@ -284,6 +286,8 @@
     "show_cost_description": "Mostra os valores de custo no painel de energia quando disponíveis",
     "show_gas": "Mostrar Gás",
     "show_gas_description": "Mostra o consumo de gás na tela inicial e no painel de energia quando configurado",
+    "solid_surfaces": "Superfícies sólidas (reduzir transparência)",
+    "solid_surfaces_description": "Troca o vidro por superfícies opacas. Útil se o texto fica difícil de ler sobre o papel de parede ou se o dispositivo estiver lento.",
     "no_entities_found": "Nenhuma entidade encontrada"
   },
   "status_messages": {
