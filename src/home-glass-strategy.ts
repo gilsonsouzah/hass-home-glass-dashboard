@@ -16,7 +16,6 @@ import { CustomizationManager } from './utils/CustomizationManager';
 import { setupLocalize, localize } from './utils/LocalizationService';
 import { BackgroundManager } from './utils/BackgroundManager';
 import { HomeAssistantUIManager } from './utils/HomeAssistantUIManager';
-import { SnapshotManager } from './utils/SnapshotManager';
 import { RTLHelper } from './utils/RTLHelper';
 import { injectLiquidGlassStyles } from './utils/LiquidGlassStyles';
 
@@ -70,10 +69,6 @@ async function generateLovelaceDashboard(info: { hass: any; narrow?: boolean }, 
 
   // Set the loaded customizations in the manager
   await customizationManager.setCustomizations(customizations);
-
-  // Initialize snapshot manager
-  const snapshotManager = SnapshotManager.getInstance();
-  snapshotManager.setHass(hass);
 
   // Initialize background manager with loaded customizations
   const backgroundManager = new BackgroundManager(customizationManager);
