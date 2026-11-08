@@ -105,6 +105,7 @@ export class BackgroundManager {
     root.removeAttribute('data-hg-wallpaper');
     root.style.removeProperty('--hg-glass-dim');
     root.style.removeProperty('--hg-title-shadow');
+    root.style.removeProperty('--hg-title-color');
   }
 
   // Inline custom properties would beat the solid-surface overrides, so they are skipped there.
@@ -112,9 +113,10 @@ export class BackgroundManager {
     const root = document.documentElement;
     const tone = wallpaperTone(luminance);
     root.setAttribute('data-hg-wallpaper', tone);
+    root.style.setProperty('--hg-title-color', tone === 'light' ? 'rgba(0, 0, 0, 0.88)' : '#fff');
+    root.style.setProperty('--hg-title-shadow', 'none');
     if (root.dataset.hgSolid === 'true' || window.matchMedia?.('(prefers-reduced-transparency: reduce)').matches) return;
     root.style.setProperty('--hg-glass-dim', dimFor(luminance));
-    root.style.setProperty('--hg-title-shadow', tone === 'light' ? '0 1px 3px rgba(0, 0, 0, 0.45)' : 'none');
   }
 
   private async probeWallpaper(backgroundStyle: string): Promise<void> {
