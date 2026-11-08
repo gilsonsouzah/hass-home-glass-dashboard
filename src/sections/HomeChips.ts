@@ -31,8 +31,6 @@ export interface ChipData {
   groupName: string;
   statusText: string;
   iconColor: string;
-  backgroundColor: string;
-  textColor: string;
   enabled: boolean;
   navigationPath?: string;
 }
@@ -381,21 +379,12 @@ export class HomeChips {
         const groupStyle = DashboardConfig.getGroupStyle(group);
         const statusText = this.getGroupStatusText(group, groupEntities);
 
-        // Get inactive background color from DashboardConfig
-        const inactiveStyle = DashboardConfig.getEntityData(
-          { entity_id: 'light.dummy', state: 'off', attributes: {} } as EntityState,
-          'light', // Use light domain to get inactive styling
-          false
-        );
-
         this.chips.push({
           group: group,
           icon: groupStyle.icon,
           groupName: typeof groupStyle.name === 'function' ? groupStyle.name() : groupStyle.name,
           statusText: statusText,
           iconColor: groupStyle.iconColor, // Always use base iconColor for chips, active state handled in HTML/CSS
-          backgroundColor: inactiveStyle.backgroundColor,
-          textColor: '#ffffff',
           enabled: config.enabled,
           navigationPath: config.navigation_path || group, // Store just the group name, not absolute path
         });
@@ -422,9 +411,9 @@ export class HomeChips {
               <div class="chip-wrapper ${this.editMode ? 'edit-mode' : ''}"
                    data-entity-id="${escapeHtml(chip.group)}"
                    data-chip-id="${escapeHtml(chip.group)}">
-                <div class="chip ${chip.group === this.activeGroup ? 'active' : ''}" role="button" tabindex="0"
+                <div class="chip hg-glass hg-pressable ${chip.group === this.activeGroup ? 'active' : ''}" role="button" tabindex="0"
                      data-group="${escapeHtml(chip.group)}"
-                     style="--chip-background-color: ${escapeHtml(chip.backgroundColor)}; --chip-icon-color: ${escapeHtml(chip.iconColor)};"
+                     style="--chip-icon-color: ${escapeHtml(chip.iconColor)};"
                      ${chip.navigationPath ? `data-navigation="${escapeHtml(chip.navigationPath)}"` : ''}>
                   <div class="chip-icon">
                     <ha-icon icon="${escapeHtml(chip.icon)}"></ha-icon>
