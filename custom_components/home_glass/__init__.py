@@ -1,7 +1,7 @@
 """Home Glass Dashboard: serves and registers the dashboard strategy bundle."""
 from __future__ import annotations
 
-import json
+import hashlib
 from pathlib import Path
 
 from homeassistant.components.frontend import add_extra_js_url, remove_extra_js_url
@@ -15,9 +15,10 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 
 def _bundle_url() -> str:
-    version = json.loads((Path(__file__).parent / "manifest.json").read_text())["version"]
-    # The version query busts the browser cache on every release.
-    return f"{URL_BASE}/{BUNDLE}?v={version}"
+    # A content hash, not the manifest version: HA's service worker caches by URL,
+    # so any rebuilt bundle must get a new URL even within the same release.
+    digest = hashlib.sha256((FRONTEND_DIR / BUNDLE).read_bytes()).hexdigest()[:12]
+    return f"{URL_BASE}/{BUNDLE}?v={digest}"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -1,14 +1,20 @@
 {
   "domain": "home_glass",
   "name": "Home Glass Dashboard",
-  "codeowners": ["@gilsonsouzah"],
+  "codeowners": [
+    "@gilsonsouzah"
+  ],
   "config_flow": true,
-  "dependencies": ["frontend", "http", "lovelace"],
+  "dependencies": [
+    "frontend",
+    "http",
+    "lovelace"
+  ],
   "documentation": "https://github.com/gilsonsouzah/hass-home-glass-dashboard",
   "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/gilsonsouzah/hass-home-glass-dashboard/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "2.0.0"
+  "version": "2.0.1"
 }

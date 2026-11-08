@@ -1,6 +1,8 @@
 export const SETTINGS_STYLE_ID = 'hg-settings-styles';
 
-const sheetCSS = (modal: string, content: string, zIndex: number) => `
+const sheetCSS = (modal: string, contentClass: string, zIndex: number) => {
+  const content = `${modal} ${contentClass}`;
+  return `
 ${modal} {
   position: fixed;
   inset: 0;
@@ -41,7 +43,7 @@ ${content} {
     opacity var(--hg-dur) var(--hg-ease-standard);
 }
 
-${modal}.show ${content} {
+${modal}.show ${contentClass} {
   transform: scale(1);
   opacity: 1;
 }
@@ -93,13 +95,14 @@ ${modal} .modal-header .modal-done {
     opacity: 1;
   }
 
-  ${modal}.show ${content} {
+  ${modal}.show ${contentClass} {
     transform: translateY(0);
   }
 }
 `;
+};
 
-export const SETTINGS_CSS = `${sheetCSS('.hg-settings-modal', '.hg-settings-modal .modal-content', 10000)}
+export const SETTINGS_CSS = `${sheetCSS('.hg-settings-modal', '.modal-content', 10000)}
 .hg-settings-modal .modal-body {
   padding: 0 0 20px;
 }
@@ -432,7 +435,7 @@ export const SETTINGS_CSS = `${sheetCSS('.hg-settings-modal', '.hg-settings-moda
 
 export const PRESETS_STYLE_ID = 'presets-modal-styles';
 
-export const PRESETS_CSS = `${sheetCSS('.presets-selection-modal', '.presets-selection-modal .presets-content', 10001)}
+export const PRESETS_CSS = `${sheetCSS('.presets-selection-modal', '.presets-content', 10001)}
 .presets-content .modal-body {
   padding: 20px;
 }

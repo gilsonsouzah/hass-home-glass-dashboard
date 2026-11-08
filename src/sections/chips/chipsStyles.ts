@@ -100,6 +100,10 @@ ${glassCSS}
   animation: none !important;
 }
 
+.chip.hg-glass, .chip.hg-pressable:hover {
+  box-shadow: var(--hg-edge-inner);
+}
+
 .chip.active {
   background: var(--hg-fill-active);
   color: var(--hg-label-on-active);

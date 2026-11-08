@@ -44,3 +44,10 @@ test('parseCodeFormat derives keypad/text and fixed length', () => {
   assert.ok(parseCodeFormat('^\\d{4}$').pattern!.test('1234'));
   assert.ok(!parseCodeFormat('^\\d{4}$').pattern!.test('12a4'));
 });
+
+test('pickHvacOnMode prefers a mode that accepts a target over fan_only/dry', () => {
+  assert.equal(pickHvacOnMode(undefined, ['off', 'fan_only', 'dry', 'cool', 'heat']), 'cool');
+  assert.equal(pickHvacOnMode(undefined, ['off', 'fan_only', 'heat']), 'heat');
+  assert.equal(pickHvacOnMode(undefined, ['off', 'fan_only']), 'fan_only');
+  assert.equal(pickHvacOnMode('heat', ['off', 'fan_only', 'cool', 'heat']), 'heat');
+});

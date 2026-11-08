@@ -1,6 +1,6 @@
 {
   "name": "hass-home-glass-dashboard",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "iOS 26 Liquid Glass style dashboard strategy for Home Assistant",
   "main": "custom_components/home_glass/frontend/home-glass-dashboard.js",
   "scripts": {

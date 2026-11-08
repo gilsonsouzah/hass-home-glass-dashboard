@@ -411,7 +411,7 @@ export class HomeCard extends HTMLElement {
     const isClimate = this.domain === 'climate';
     const fallbackTemp = current === null ? (isClimate ? '--°' : '--.-°') : `${current.toFixed(isClimate ? 0 : 1)}°`;
     const isActive = entityData.isActive;
-    const showControls = isActive && target !== null;
+    const showControls = isActive && target !== null && (!isClimate || (Number(state.attributes.supported_features) & 1) !== 0);
     return {
       isActive,
       showControls,

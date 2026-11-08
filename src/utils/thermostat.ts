@@ -3,10 +3,14 @@ export function asNumber(value: unknown): number | null {
 }
 
 /** Mode used to turn a climate on: the last active mode, else the first non-off entry of hvac_modes. */
+// Prefer temperature-oriented modes when turning on without a remembered mode.
+const NO_TARGET_MODES = ['fan_only', 'dry', 'off'];
+
 export function pickHvacOnMode(lastMode: string | undefined, hvacModes: unknown): string | null {
   const modes = Array.isArray(hvacModes) ? hvacModes.filter((m): m is string => typeof m === 'string') : [];
   if (lastMode && lastMode !== 'off' && (modes.length === 0 || modes.includes(lastMode))) return lastMode;
-  return modes.find((m) => m !== 'off') ?? null;
+  // Keep the integration's order, but skip fan_only/dry: they reject a target temperature
+  return modes.find((m) => !NO_TARGET_MODES.includes(m)) ?? modes.find((m) => m !== 'off') ?? null;
 }
 
 const decimalsOf = (n: number) => (String(n).split('.')[1] ?? '').length;
