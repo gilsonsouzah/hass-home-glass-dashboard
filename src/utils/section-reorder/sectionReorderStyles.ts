@@ -37,14 +37,14 @@ export function injectSectionReorderStyles(): void {
         width: 600px;
         max-width: 90vw;
         max-height: 80vh;
-        background: rgba(28, 28, 30, 1);
-        border-radius: var(--apple-modal-radius, 20px);
+        background: var(--hg-glass-thick, rgba(28, 28, 30, 1));
+        border-radius: var(--hg-radius-sheet, 28px);
         overflow-y: auto;
         overflow-x: hidden;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        box-shadow: var(--hg-shadow-sheet, 0 20px 40px rgba(0, 0, 0, 0.35));
         transform: scale(0.9);
         opacity: 0;
-        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        transition: transform var(--hg-dur, 250ms) var(--hg-ease-spring, ease), opacity var(--hg-dur, 250ms) var(--hg-ease-standard, ease);
       }
 
       .apple-section-reorder-modal.show .modal-content {
@@ -175,7 +175,7 @@ export function injectSectionReorderStyles(): void {
         color: #ffffff;
         cursor: pointer;
         border-radius: 16px;
-        transition: all 0.2s ease;
+        transition: background-color var(--hg-dur-fast, 150ms) var(--hg-ease-standard, ease), color var(--hg-dur-fast, 150ms) var(--hg-ease-standard, ease), transform var(--hg-dur-fast, 150ms) var(--hg-ease-standard, ease);
         margin-right: 12px;
         display: flex;
         align-items: center;

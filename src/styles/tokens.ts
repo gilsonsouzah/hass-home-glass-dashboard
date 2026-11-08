@@ -52,11 +52,11 @@ const darkVars = `
 `;
 
 const lightVars = `
-  --hg-glass-regular: rgba(255, 255, 255, 0.62);
+  --hg-glass-regular: rgba(255, 255, 255, 0.34);
   --hg-glass-thick: rgba(250, 250, 252, 0.86);
   --hg-glass-clear: rgba(255, 255, 255, 0.18);
   --hg-glass-dim: rgba(0, 0, 0, 0.28);
-  --hg-fill-active: rgba(255, 255, 255, 0.92);
+  --hg-fill-active: rgba(255, 255, 255, 0.96);
   --hg-label-on-active: #1d1d1f;
   --hg-specular: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.2) 40%, rgba(255, 255, 255, 0.5) 70%, rgba(255, 255, 255, 0.85));
   --hg-edge-inner: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(0, 0, 0, 0.06);
@@ -166,7 +166,7 @@ export const tokensCSS = `
   --hg-backdrop-thick: blur(var(--hg-blur-thick)) saturate(var(--hg-saturate));
   --hg-backdrop-clear: blur(var(--hg-blur-clear)) saturate(var(--hg-saturate));
 
-  --hg-font: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, sans-serif;
+  --hg-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--ha-font-family-body, Roboto), "Segoe UI", sans-serif;
   ${textTokens}
 
   --hg-ease-standard: cubic-bezier(0.2, 0, 0, 1);
