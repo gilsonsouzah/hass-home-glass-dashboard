@@ -53,7 +53,9 @@
     "error": "错误",
     "heat_to": "加热至",
     "cool_to": "制冷至",
-    "none": "无"
+    "none": "无",
+    "detected": "已检测到",
+    "current": "当前"
   },
   "units": {
     "percent": "%",
@@ -281,7 +283,8 @@
     "show_cost": "显示费用",
     "show_cost_description": "在能源仪表板上显示费用数据（如可用）",
     "show_gas": "显示燃气",
-    "show_gas_description": "在主屏幕和能源仪表板上显示燃气消耗（如已配置）"
+    "show_gas_description": "在主屏幕和能源仪表板上显示燃气消耗（如已配置）",
+    "no_entities_found": "未找到实体"
   },
   "status_messages": {
     "unavailable": "不可用",
