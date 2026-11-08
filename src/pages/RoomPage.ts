@@ -142,7 +142,7 @@ export class RoomPage {
       
       // Add status section after title but before main content
       if (this.statusSection && statusAreaEntities.length > 0) {
-        await this.statusSection.render(container, statusAreaEntities, hass, areaId);
+        await this.statusSection.render(container, statusAreaEntities, hass);
       }
       
       // Separate entities by device groups for organized display

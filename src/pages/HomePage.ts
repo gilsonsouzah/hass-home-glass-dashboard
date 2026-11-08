@@ -128,7 +128,6 @@ export class HomePage {
         areas,
         scenesEntities,
         camerasEntities,
-        filteredEntities, // Pass all filtered entities for favorites
         hass,
         onTallToggle
       );
@@ -143,7 +142,6 @@ export class HomePage {
     areas: Area[],
     scenesEntities: Entity[],
     camerasEntities: Entity[],
-    allEntities: Entity[],
     hass: any,
     onTallToggle?: (entityId: string, areaId: string) => void | Promise<void | boolean>
   ): Promise<void> {
@@ -180,7 +178,7 @@ export class HomePage {
     const hasFavorites = await this.customizationManager?.hasFavoriteAccessories();
     if (hasFavorites) {
       availableSections.set('favorites_section', async (target: HTMLElement) => {
-        await this.favoritesSection!.render(target, allEntities, hass, onTallToggle);
+        await this.favoritesSection!.render(target, hass);
       });
     }
 

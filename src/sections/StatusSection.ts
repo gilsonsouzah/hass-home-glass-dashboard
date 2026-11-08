@@ -33,7 +33,7 @@ export class StatusSection {
    * Render status section for a specific area or group.
    * ponytail: `_areaId` is unused; RoomPage/GroupPage still pass it, drop it there first.
    */
-  async render(container: HTMLElement, entities: Entity[], hass: any, _areaId?: string): Promise<void> {
+  async render(container: HTMLElement, entities: Entity[], hass: any): Promise<void> {
     this._hass = hass;
     this._entities = entities;
     this._container = container;

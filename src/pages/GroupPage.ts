@@ -212,7 +212,7 @@ export class GroupPage {
 
       // Add status section after chips
       if (this.statusSection && statusGroupEntities.length > 0) {
-        await this.statusSection.render(container, statusGroupEntities, hass, this._group || 'group');
+        await this.statusSection.render(container, statusGroupEntities, hass);
       }
 
       // Apply user customizations

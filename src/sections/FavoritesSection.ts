@@ -11,12 +11,7 @@ export class FavoritesSection {
     this.customizationManager = customizationManager;
   }
 
-  async render(
-    container: HTMLElement,
-    allEntities: Entity[],
-    hass: any,
-    onTallToggle?: (entityId: string, areaId: string) => void | Promise<void | boolean>
-  ): Promise<void> {
+  async render(container: HTMLElement, hass: any): Promise<void> {
     // Get favorite accessories from settings
     const favoriteAccessories = await this.customizationManager.getFavoriteAccessories();
     

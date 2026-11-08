@@ -44,9 +44,7 @@ export class HomeHeader {
   private sidebarObserver?: { disconnect(): void };
   private setHassTimeout: NodeJS.Timeout | null = null;
   private pendingHass: any = null;
-
-  // ponytail: _forceInstance is unused but HomeView (not in this change) still passes it; drop both together.
-  constructor(_forceInstance = false) {
+  constructor() {
     this.uiManager = HomeAssistantUIManager.getInstance();
   }
 

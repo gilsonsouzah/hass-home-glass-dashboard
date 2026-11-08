@@ -49,9 +49,7 @@ export class ChipsConfigurationManager {
   /**
    * Get chips settings from dashboard configuration
    */
-  static getSettingsFromConfig(_dashboardConfig?: unknown): ChipsSettings {
-    // For now, always use default settings - chips are enabled by default
-    // In the future, users can configure this through the dashboard config
+  static getSettingsFromConfig(): ChipsSettings {
     return this.getDefaultSettings();
   }
 
