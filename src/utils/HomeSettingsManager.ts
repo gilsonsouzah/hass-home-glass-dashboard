@@ -26,6 +26,7 @@ export interface HomeSettingsData {
 
 export class HomeSettingsManager {
   private modal?: HTMLElement;
+  private listenersAbort?: AbortController;
   private customizationManager: CustomizationManager;
   private onSaveCallback: () => void;
   private hass: any;
@@ -151,8 +152,7 @@ export class HomeSettingsManager {
         friendly_name: state.attributes.friendly_name || state.entity_id,
         domain: state.entity_id.split('.')[0],
         state: state.state,
-        attributes: state.attributes,
-        area_id: state.attributes.area_id || null
+        attributes: state.attributes
       }))
       .sort((a, b) => a.friendly_name.localeCompare(b.friendly_name));
 
@@ -202,8 +202,7 @@ export class HomeSettingsManager {
         friendly_name: state.attributes.friendly_name || state.entity_id,
         domain: state.entity_id.split('.')[0],
         state: state.state,
-        attributes: state.attributes,
-        area_id: state.attributes.area_id || null
+        attributes: state.attributes
       }))
       .sort((a, b) => a.friendly_name.localeCompare(b.friendly_name));
   }
@@ -969,6 +968,7 @@ export class HomeSettingsManager {
 
   private setupEventListeners() {
     if (!this.modal) return;
+    this.listenersAbort = new AbortController();
 
     // Cancel button
     const cancelBtn = this.modal.querySelector('.modal-cancel');
@@ -989,7 +989,7 @@ export class HomeSettingsManager {
     this.setupRemoveButtons();
 
     // Escape key
-    document.addEventListener('keydown', this.handleEscapeKey);
+    document.addEventListener('keydown', this.handleEscapeKey, { signal: this.listenersAbort.signal });
 
     // Setup background settings
     this.setupBackgroundEventListeners();
@@ -1019,7 +1019,7 @@ export class HomeSettingsManager {
         if (!selector.contains(e.target as Node)) {
           results.classList.remove('show');
         }
-      });
+      }, { signal: this.listenersAbort?.signal });
 
       // With absolute positioning, we don't need scroll repositioning
       // but we might want to resize on window resize
@@ -1029,12 +1029,7 @@ export class HomeSettingsManager {
         }
       };
       
-      window.addEventListener('resize', resizeHandler);
-      
-      // Store cleanup function for later
-      (results as any)._cleanup = () => {
-        window.removeEventListener('resize', resizeHandler);
-      };
+      window.addEventListener('resize', resizeHandler, { signal: this.listenersAbort?.signal });
     });
   }
 
@@ -1275,25 +1270,17 @@ export class HomeSettingsManager {
   private closeModal() {
     if (!this.modal) return;
 
-    // Cleanup autocomplete event listeners
-    this.modal.querySelectorAll('.autocomplete-results').forEach(results => {
-      if ((results as any)._cleanup) {
-        (results as any)._cleanup();
-      }
-    });
-
-    // Restore background scrolling
     document.body.style.overflow = '';
-
     this.modal.classList.remove('show');
-    
-    setTimeout(() => {
-      document.removeEventListener('keydown', this.handleEscapeKey);
-      if (this.modal && this.modal.parentNode) {
-        this.modal.parentNode.removeChild(this.modal);
-      }
-      this.modal = undefined;
-    }, 300);
+    setTimeout(() => this.teardownModal(), 300);
+  }
+
+  private teardownModal() {
+    this.listenersAbort?.abort();
+    this.listenersAbort = undefined;
+    document.body.style.overflow = '';
+    this.modal?.remove();
+    this.modal = undefined;
   }
 
   private async saveAndClose() {
@@ -1350,16 +1337,8 @@ export class HomeSettingsManager {
     
     // Clean up modal after fade animation
     setTimeout(() => {
-      // Restore background scrolling
-      document.body.style.overflow = '';
-      
-      // Remove modal from DOM
-      document.removeEventListener('keydown', this.handleEscapeKey);
-      if (this.modal && this.modal.parentNode) {
-        this.modal.parentNode.removeChild(this.modal);
-      }
-      this.modal = undefined;
-      
+      this.teardownModal();
+
       // Trigger callback if re-render is needed
       if (this.onSaveCallback && this.requiresRender) {
         this.onSaveCallback();
@@ -1448,6 +1427,7 @@ export class HomeSettingsManager {
         if (file) {
           await this.handleBackgroundFileUpload(file);
         }
+        target.value = '';
       });
     }
 
@@ -1537,9 +1517,6 @@ export class HomeSettingsManager {
       } else {
       previewElement.style.setProperty('background', backgroundStyle);
       }
-    
-    // Also check computed styles
-    const computedStyles = window.getComputedStyle(previewElement);
     }
 
   private updateUIToggle(toggleId: string, isActive: boolean) {
@@ -1913,9 +1890,13 @@ export class HomeSettingsManager {
   }
 
   private handleEscapeKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      this.closeModal();
+    if (e.key !== 'Escape') return;
+    const presetsCancel = document.querySelector('.presets-selection-modal .modal-cancel');
+    if (presetsCancel) {
+      presetsCancel.dispatchEvent(new MouseEvent('click'));
+      return;
     }
+    this.closeModal();
   };
 
   public destroy() {
