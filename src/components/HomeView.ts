@@ -19,6 +19,7 @@ import { buildHeaderConfig, headerTitleFor } from './view/headerConfig';
 import { pageContextFor } from './view/pageTypes';
 import { getScrollParent } from './view/scroll';
 import { updateTallCardVisual } from './view/tallCard';
+import { getActivePage, renderActivePage, ViewPages } from './view/renderActivePage';
 import { handleEntityChange, handleAreaChange, applyHomeCustomizationDiff } from './view/domUpdates';
 
 const RENDER_THROTTLE_MS = 500;
@@ -44,11 +45,7 @@ export class HomeView extends HTMLElement {
   private _lastLanguage?: string; // Track language for change detection
   
   // Page renderers
-  private homePage: HomePage;
-  private groupPage: GroupPage;
-  private roomPage: RoomPage;
-  private scenesPage: ScenesPage;
-  private camerasPage: CamerasPage;
+  private pages: ViewPages;
 
   // Managers
   private customizationManager: CustomizationManager;
@@ -92,11 +89,13 @@ export class HomeView extends HTMLElement {
     );
     
     // Initialize page renderers
-    this.homePage = new HomePage();
-    this.groupPage = new GroupPage();
-    this.roomPage = new RoomPage();
-    this.scenesPage = new ScenesPage();
-    this.camerasPage = new CamerasPage();
+    this.pages = {
+      homePage: new HomePage(),
+      groupPage: new GroupPage(),
+      roomPage: new RoomPage(),
+      scenesPage: new ScenesPage(),
+      camerasPage: new CamerasPage(),
+    };
     
     // Set up header manager dependencies
     this.appleHeader.setCustomizationManager(this.customizationManager);
@@ -516,28 +515,13 @@ export class HomeView extends HTMLElement {
     }
   }
 
-  /**
-   * The single page object that is actually rendered for this view instance,
-   * selected by pageType. Only this page needs the new hass; the other four
-   * page objects are never rendered here.
-   */
-  private getActivePage(): any {
-    switch (this.config?.pageType) {
-      case 'group': return this.groupPage;
-      case 'room': return this.roomPage;
-      case 'scenes': return this.scenesPage;
-      case 'cameras': return this.camerasPage;
-      default: return this.homePage;
-    }
-  }
-
   private updateExistingCards(oldHass: any, newHass: any) {
     if (!this.content || !newHass) return;
 
     this.cardRouter.update(this.content, oldHass, newHass);
 
     // Only the rendered page object needs the new hass.
-    const activePage = this.getActivePage();
+    const activePage = getActivePage(this.pages, this.config);
     if (activePage) activePage.hass = newHass;
   }
 
@@ -558,9 +542,9 @@ export class HomeView extends HTMLElement {
     
     const pageType = this.config?.pageType;
     if (pageType === 'cameras') {
-      this.camerasPage.updateDragAndDrop(editMode, this.content!);
+      this.pages.camerasPage.updateDragAndDrop(editMode, this.content!);
     } else if (pageType === 'scenes') {
-      this.scenesPage.updateDragAndDrop(editMode, this.content!);
+      this.pages.scenesPage.updateDragAndDrop(editMode, this.content!);
     } else {
       if (editMode) {
         // Let the cards finish rendering before wiring up sortables
@@ -654,75 +638,14 @@ export class HomeView extends HTMLElement {
       this.chips.forceReset();
       this.callOnCards('pauseCamera');
 
-      if (this.config?.pageType === 'group' && this.config?.deviceGroup) {
-        // Configure and render group page
-        this.groupPage.hass = this._hass;
-        this.groupPage.setConfig({
-          group: this.config.deviceGroup as DeviceGroup,
-          customizations: this.customizationManager.getCustomizations()
-        });
-        
-        await this.groupPage.render(
-          this.content,
-          this.config.deviceGroup as DeviceGroup,
-          this._hass,
-          (entityId: string, areaId: string) => this.toggleTallCard(entityId, areaId)
-        );
-      } else if (this.config?.pageType === 'room' && this.config?.areaId && this.config?.areaName) {
-        // Configure and render room page
-        this.roomPage.hass = this._hass;
-        this.roomPage.setConfig({
-          areaId: this.config.areaId,
-          customizations: this.customizationManager.getCustomizations()
-        });
-        
-        await this.roomPage.render(
-          this.content,
-          this.config.areaId,
-          this.config.areaName,
-          this._hass,
-          (entityId: string, areaId: string) => this.toggleTallCard(entityId, areaId)
-        );
-      } else if (this.config?.pageType === 'scenes') {
-        // Configure and render scenes page
-        this.scenesPage.hass = this._hass;
-        this.scenesPage.setConfig({
-          customizations: this.customizationManager.getCustomizations()
-        });
-        
-        await this.scenesPage.render(
-          this.content,
-          this._hass,
-          (entityId: string, areaId: string) => this.toggleTallCard(entityId, areaId)
-        );
-      } else if (this.config?.pageType === 'cameras') {
-        // Configure and render cameras page
-        this.camerasPage.hass = this._hass;
-        this.camerasPage.setConfig({
-          customizations: this.customizationManager.getCustomizations()
-        });
-        
-        await this.camerasPage.render(
-          this.content,
-          this._hass,
-          (entityId: string, areaId: string) => this.toggleTallCard(entityId, areaId)
-        );
-      } else {
-        // Configure and render home page (default)
-        const homeTitle = this.config?.title || this._hass?.config?.location_name || localize('pages.my_home');
-        this.homePage.hass = this._hass;
-        this.homePage.setConfig({
-          title: homeTitle,
-          customizations: this.customizationManager.getCustomizations()
-        });
-        
-        await this.homePage.render(
-          this.content,
-          this._hass,
-          homeTitle,
-          (entityId: string, areaId: string) => this.toggleTallCard(entityId, areaId)
-        );
-      }
+      await renderActivePage(
+        this.pages,
+        this.config,
+        this._hass,
+        this.customizationManager.getCustomizations(),
+        this.content,
+        (entityId, areaId) => this.toggleTallCard(entityId, areaId)
+      );
     } catch (error) {
       console.error('Error rendering page:', error);
       this._isTransitioning = false;
