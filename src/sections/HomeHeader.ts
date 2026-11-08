@@ -7,6 +7,7 @@ import { HomeChips, ChipsConfig } from './HomeChips';
 import { DeviceGroup } from '../config/DashboardConfig';
 import { EntityState } from '../types/types';
 import { localize } from '../utils/LocalizationService';
+import { escapeHtml } from '../utils/html';
 import { RTLHelper } from '../utils/RTLHelper';
 import { injectLiquidGlassStyles, LiquidGlassClasses, liquidGlassCSS } from '../utils/LiquidGlassStyles';
 
@@ -406,7 +407,7 @@ export class HomeHeader {
           }
           <div class="apple-header-scrolled">
             <div class="apple-header-scrolled-title-container">
-              <h2 class="apple-header-scrolled-title">${this.currentConfig.title}</h2>
+              <h2 class="apple-header-scrolled-title">${escapeHtml(this.currentConfig.title)}</h2>
             </div>
             <div class="apple-header-scrolled-chips"></div>
           </div>
@@ -475,7 +476,7 @@ export class HomeHeader {
             }
             <div class="apple-header-scrolled">
               <div class="apple-header-scrolled-title-container">
-                <h2 class="apple-header-scrolled-title">${this.currentConfig.title}</h2>
+                <h2 class="apple-header-scrolled-title">${escapeHtml(this.currentConfig.title)}</h2>
               </div>
               <div class="apple-header-scrolled-chips"></div>
             </div>
@@ -686,9 +687,9 @@ export class HomeHeader {
           const areaName = area.name || areaId;
           const isActive = currentRoomId === areaId;
           return `
-            <div class="dropdown-item room-item${isActive ? ' active' : ''}" data-room-id="${areaId}">
+            <div class="dropdown-item room-item${isActive ? ' active' : ''}" data-room-id="${escapeHtml(areaId)}">
               <span class="room-checkmark"></span>
-              <span>${areaName}</span>
+              <span>${escapeHtml(areaName)}</span>
             </div>
           `;
         })

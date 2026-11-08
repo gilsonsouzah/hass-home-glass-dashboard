@@ -1,6 +1,7 @@
 import { CustomizationManager } from './CustomizationManager';
 import { DashboardConfig } from '../config/DashboardConfig';
 import { localize } from './LocalizationService';
+import { escapeHtml } from './html';
 import { BackgroundManager } from './BackgroundManager';
 import { HomeAssistantUIManager } from './HomeAssistantUIManager';
 import { injectLiquidGlassStyles, LiquidGlassClasses } from './LiquidGlassStyles';
@@ -208,7 +209,7 @@ export class HomeSettingsManager {
   }
 
   private formatPresetName(presetName: string): string {
-    return localize(`wallpaper_presets.${presetName}`) || (presetName.charAt(0).toUpperCase() + presetName.slice(1));
+    return localize(`wallpaper_presets.${presetName}`, presetName.charAt(0).toUpperCase() + presetName.slice(1));
   }
 
   private createModal() {
@@ -439,8 +440,8 @@ export class HomeSettingsManager {
       if (!entity) return '';
       
       return `
-        <div class="selected-entity-chip" data-entity-id="${entityId}">
-          <span class="entity-name">${entity.friendly_name}</span>
+        <div class="selected-entity-chip" data-entity-id="${escapeHtml(entityId)}">
+          <span class="entity-name">${escapeHtml(entity.friendly_name)}</span>
           <ha-icon icon="mdi:close" class="remove-entity"></ha-icon>
         </div>
       `;
@@ -457,16 +458,16 @@ export class HomeSettingsManager {
       if (!entity) {
         // Entity might be saved but no longer exists - show entity_id
         return `
-          <div class="selected-entity-chip" data-entity-id="${entityId}">
-            <span class="entity-name">${entityId}</span>
+          <div class="selected-entity-chip" data-entity-id="${escapeHtml(entityId)}">
+            <span class="entity-name">${escapeHtml(entityId)}</span>
             <ha-icon icon="mdi:close" class="remove-entity"></ha-icon>
           </div>
         `;
       }
       
       return `
-        <div class="selected-entity-chip" data-entity-id="${entityId}">
-          <span class="entity-name">${entity.friendly_name}</span>
+        <div class="selected-entity-chip" data-entity-id="${escapeHtml(entityId)}">
+          <span class="entity-name">${escapeHtml(entity.friendly_name)}</span>
           <ha-icon icon="mdi:close" class="remove-entity"></ha-icon>
         </div>
       `;
@@ -478,8 +479,8 @@ export class HomeSettingsManager {
     const state = this.hass?.states?.[entityId];
     const friendlyName = state?.attributes?.friendly_name || entityId;
     return `
-      <div class="selected-entity-chip" data-entity-id="${entityId}">
-        <span class="entity-name">${friendlyName}</span>
+      <div class="selected-entity-chip" data-entity-id="${escapeHtml(entityId)}">
+        <span class="entity-name">${escapeHtml(friendlyName)}</span>
         <ha-icon icon="mdi:close" class="remove-entity"></ha-icon>
       </div>
     `;
@@ -1128,7 +1129,7 @@ export class HomeSettingsManager {
     }).slice(0, 10); // Limit to 10 results
 
     if (filteredEntities.length === 0 && query !== '') {
-      resultsContainer.innerHTML = '<div class="autocomplete-result"><div class="autocomplete-result-name">No entities found</div></div>';
+      resultsContainer.innerHTML = `<div class="autocomplete-result"><div class="autocomplete-result-name">${escapeHtml(localize('settings.no_entities_found'))}</div></div>`;
       this.positionAutocompleteResults(resultsContainer);
       resultsContainer.classList.add('show');
       return;
@@ -1140,9 +1141,9 @@ export class HomeSettingsManager {
     }
 
     resultsContainer.innerHTML = filteredEntities.map(entity => `
-      <div class="autocomplete-result" data-entity-id="${entity.entity_id}">
-        <div class="autocomplete-result-name">${entity.friendly_name}</div>
-        <div class="autocomplete-result-id">${entity.entity_id}</div>
+      <div class="autocomplete-result" data-entity-id="${escapeHtml(entity.entity_id)}">
+        <div class="autocomplete-result-name">${escapeHtml(entity.friendly_name)}</div>
+        <div class="autocomplete-result-id">${escapeHtml(entity.entity_id)}</div>
       </div>
     `).join('');
 

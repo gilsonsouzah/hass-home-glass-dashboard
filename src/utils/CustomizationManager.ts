@@ -324,8 +324,7 @@ export class CustomizationManager {
       const success = await this.saveCustomizationsToStorage(this._hass, this.customizations);
       
       if (!success) {
-        console.error('Home Glass: Failed to save customizations - check Home Assistant setup');
-        console.error('Home Glass: Please create an input_text helper named "apple_home_dashboard_config" for persistent storage');
+        console.error('Home Glass: Failed to save customizations - saving requires an admin user and a storage-mode dashboard');
       }
       // Removed global refresh - individual components should handle their own updates
     } catch (error) {
