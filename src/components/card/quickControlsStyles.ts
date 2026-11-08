@@ -1,3 +1,4 @@
+import { GLYPH_ON_COLOR } from '../../config/colors';
 import { glassCSS } from '../../styles/glass';
 
 // The host lives in document.body, so it inherits the --hg-* tokens from the document root.
@@ -166,7 +167,7 @@ export function getQuickControlsStyles(): string {
     }
 
     .slider-block.kelvin .slider {
-      background: linear-gradient(90deg, var(--hg-color-orange), #ffffff 50%, var(--hg-color-cyan));
+      background: linear-gradient(90deg, var(--hg-color-orange), ${GLYPH_ON_COLOR} 50%, var(--hg-color-cyan));
     }
 
     .slider-block.kelvin .slider-fill { background: transparent; }
@@ -310,8 +311,8 @@ export function getQuickControlsStyles(): string {
       width: 27px;
       height: 27px;
       border-radius: var(--hg-radius-icon-well);
-      background: #ffffff;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      background: ${GLYPH_ON_COLOR};
+      box-shadow: var(--hg-shadow-tile);
       transition: transform var(--hg-dur) var(--hg-ease-spring);
     }
 
