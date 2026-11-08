@@ -20,8 +20,8 @@ export const DOMAIN_TO_GROUP: Record<string, DeviceGroup> = {
   alarm_control_panel: DeviceGroup.SECURITY,
   media_player: DeviceGroup.MEDIA,
   camera: DeviceGroup.SECURITY,
-  binary_sensor: DeviceGroup.SECURITY,
-  sensor: DeviceGroup.SECURITY,
+  binary_sensor: DeviceGroup.OTHER,
+  sensor: DeviceGroup.OTHER,
   vacuum: DeviceGroup.VACUUM,
   water_heater: DeviceGroup.CLIMATE,
 };
@@ -74,14 +74,14 @@ export function getDeviceGroup(
     if (deviceClass === 'illuminance' || unit === 'lx') return DeviceGroup.LIGHTING;
     if (deviceClass === 'energy' || deviceClass === 'power') return DeviceGroup.ENERGY;
     if (SECURITY_SENSOR_CLASSES.has(deviceClass)) return DeviceGroup.SECURITY;
-    return DeviceGroup.SECURITY;
+    return DeviceGroup.OTHER;
   }
 
   if (domain === 'binary_sensor' && attributes) {
     const deviceClass = attributes.device_class;
     if (SECURITY_SENSOR_CLASSES.has(deviceClass)) return DeviceGroup.SECURITY;
     if (deviceClass === 'light') return DeviceGroup.LIGHTING;
-    return DeviceGroup.SECURITY;
+    return DeviceGroup.OTHER;
   }
 
   return DOMAIN_TO_GROUP[domain];
