@@ -39,7 +39,7 @@ export function mediaTileModel(
   return {
     artwork,
     playing: state.state === 'playing',
-    canPlayPause: (supported & (PAUSE | PLAY)) !== 0,
+    canPlayPause: (supported & (PAUSE | PLAY)) === (PAUSE | PLAY),
     line: mediaStateLine(state.attributes),
   };
 }

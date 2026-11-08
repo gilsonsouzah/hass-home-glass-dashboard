@@ -37,9 +37,11 @@ test('tile model needs artwork and an active player', () => {
   assert.equal(mediaTileModel({ state: 'playing', attributes: { media_title: 'T' } }, hassUrl), null);
 });
 
-test('play/pause button needs the PAUSE or PLAY feature', () => {
+test('play/pause button needs both the PAUSE and PLAY features', () => {
   const base = { entity_picture: '/api/art' };
   assert.equal(mediaTileModel({ state: 'playing', attributes: { ...base, supported_features: 4 } }, hassUrl)?.canPlayPause, false);
-  assert.equal(mediaTileModel({ state: 'playing', attributes: { ...base, supported_features: 1 } }, hassUrl)?.canPlayPause, true);
+  assert.equal(mediaTileModel({ state: 'playing', attributes: { ...base, supported_features: 1 } }, hassUrl)?.canPlayPause, false);
+  assert.equal(mediaTileModel({ state: 'playing', attributes: { ...base, supported_features: 16384 } }, hassUrl)?.canPlayPause, false);
+  assert.equal(mediaTileModel({ state: 'playing', attributes: { ...base, supported_features: 16385 } }, hassUrl)?.canPlayPause, true);
   assert.equal(mediaTileModel({ state: 'playing', attributes: base }, hassUrl)?.canPlayPause, false);
 });

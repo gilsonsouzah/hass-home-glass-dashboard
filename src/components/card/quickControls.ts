@@ -168,7 +168,7 @@ export function mediaControls(attrs: Attrs): MediaControls {
     volume: hasFeature(attrs, MEDIA.VOLUME_SET),
     previous: hasFeature(attrs, MEDIA.PREVIOUS_TRACK),
     next: hasFeature(attrs, MEDIA.NEXT_TRACK),
-    playPause: hasFeature(attrs, MEDIA.PAUSE | MEDIA.PLAY),
+    playPause: (features(attrs) & (MEDIA.PAUSE | MEDIA.PLAY)) === (MEDIA.PAUSE | MEDIA.PLAY),
   };
 }
 

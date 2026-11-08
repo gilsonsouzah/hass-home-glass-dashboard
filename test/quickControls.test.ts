@@ -113,8 +113,9 @@ test('climate controls honor min/max/step and hvac_modes', () => {
 });
 
 test('media controls and volume', () => {
-  assert.deepEqual(mediaControls({ supported_features: 4 | 16 | 32 | 1 }), { volume: true, previous: true, next: true, playPause: true });
-  assert.deepEqual(mediaControls({ supported_features: 16384 }), { volume: false, previous: false, next: false, playPause: true });
+  assert.deepEqual(mediaControls({ supported_features: 4 | 16 | 32 | 1 | 16384 }), { volume: true, previous: true, next: true, playPause: true });
+  assert.deepEqual(mediaControls({ supported_features: 16384 }), { volume: false, previous: false, next: false, playPause: false });
+  assert.equal(mediaControls({ supported_features: 1 }).playPause, false);
   assert.equal(mediaControls({ supported_features: 4 }).playPause, false);
   assert.equal(volumePercent({ volume_level: 0.456 }), 46);
   assert.equal(volumePercent({}), 0);
