@@ -48,10 +48,9 @@ export class DataService {
     return isDomainSupported(entity.entity_id.split('.')[0]);
   }
 
-  /** Same hidden/disabled rule, read from the live `hass.entities` registry. */
+  /** `hass.entities` is the display registry: it carries `hidden` and omits disabled entities. Unregistered entities count as visible. */
   static isVisibleInRegistry(hass: any, entityId: string): boolean {
-    const registry = hass.entities?.[entityId];
-    return !registry || (!registry.hidden_by && !registry.disabled_by);
+    return hass.entities?.[entityId]?.hidden !== true;
   }
 
   static indexDevices(devices: Device[]): Map<string, Device> {
