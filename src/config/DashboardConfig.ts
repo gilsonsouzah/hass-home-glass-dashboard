@@ -1,18 +1,6 @@
 /**
- * Central configuration for Apple Home Dashboard
- * Handles entity styling, grouping  static readonly DOMAIN_TO_GROUP: Record<string, DeviceGroup> = {
-    'light': DeviceGroup.LIGHTING,
-    'switch': DeviceGroup.OTHER, // Outlets and switches
-    'climate': DeviceGroup.CLIMATE,
-    'fan': DeviceGroup.CLIMATE,
-    'cover': DeviceGroup.CLIMATE, // Default - garage doors go to security
-    'lock': DeviceGroup.SECURITY,
-    'alarm_control_panel': DeviceGroup.SECURITY,
-    'media_player': DeviceGroup.MEDIA,
-    'camera': DeviceGroup.SECURITY,
-    'binary_sensor': DeviceGroup.SECURITY, // Motion, occupancy, contact sensors
-    'sensor': DeviceGroup.OTHER // Temperature, humidity, battery sensors
-  };rocessing
+ * Central configuration for the Home Glass dashboard.
+ * Handles entity styling, grouping and state text processing.
  */
 
 import { EntityData, EntityState } from '../types/types';
@@ -45,6 +33,29 @@ export interface GroupStyle {
 // =====================================================================
 
 // Special climate colors based on hvac mode
+/** [on, off] translation keys per binary_sensor device_class */
+const BINARY_SENSOR_TEXT: Record<string, [string, string]> = {
+  motion: ['motion.detected', 'motion.not_detected'],
+  occupancy: ['occupancy.detected', 'occupancy.not_detected'],
+  door: ['status.open', 'status.closed'],
+  window: ['status.open', 'status.closed'],
+  opening: ['status.open', 'status.closed'],
+  garage_door: ['status.open', 'status.closed'],
+  moisture: ['status.detected', 'status.clear'],
+  gas: ['status.detected', 'status.clear'],
+  problem: ['status.detected', 'status.clear'],
+  sound: ['status.detected', 'status.clear'],
+  vibration: ['status.detected', 'status.clear'],
+  safety: ['status.unsafe', 'status.safe'],
+  smoke: ['smoke.detected', 'smoke.not_detected'],
+  lock: ['status.locked', 'status.unlocked'],
+  plug: ['status.plugged_in', 'status.unplugged'],
+  presence: ['status.home', 'status.away'],
+  power: ['status.on', 'status.off'],
+  running: ['status.running', 'status.idle'],
+  update: ['status.update_available', 'status.up_to_date'],
+};
+
 const CLIMATE_MODE_COLORS = {
   heat: '#ff8d13',
   heating: '#ff8d13',
@@ -491,7 +502,11 @@ export class DashboardConfig {
       case 'input_button':
         return 'mdi:gesture-tap-button';
       case 'vacuum':
-        return entityState === 'cleaning' ? 'mdi:robot-vacuum' : 'mdi:robot-vacuum';
+        return 'mdi:robot-vacuum';
+      case 'scene':
+        return 'mdi:palette';
+      case 'script':
+        return 'mdi:script-text';
       case 'sensor': {
         const dc = attributes?.device_class;
         if (dc === 'energy') return 'mdi:flash';
@@ -626,7 +641,7 @@ export class DashboardConfig {
 
     // Get device group and determine if active
     const deviceGroup = this.getDeviceGroup(domain, state.entity_id, attributes);
-    const isActive = this.isEntityActive(domain, entityState, attributes);
+    const isActive = this.isEntityActive(domain, entityState);
 
     const icon = attributes.icon || this.getFallbackIcon(domain, entityState, attributes, state.entity_id);
     const stateText = this.getStateText(domain, entityState, attributes, hass);
@@ -668,7 +683,7 @@ export class DashboardConfig {
   /**
    * Determine if an entity should be considered active based on domain and state
    */
-  private static isEntityActive(domain: string, entityState: string, attributes?: any): boolean {
+  private static isEntityActive(domain: string, entityState: string): boolean {
     let result;
     switch (domain) {
       case 'light':
@@ -702,21 +717,9 @@ export class DashboardConfig {
         // Sensors are always considered active for status display
         result = true;
         break;
-      case 'input_boolean':
-        result = entityState === 'on';
-        break;
-      case 'button':
-      case 'input_button':
-        // Buttons are always shown as actionable (similar to scenes)
-        result = true;
-        break;
       case 'vacuum':
         // Vacuum is active when cleaning, returning, or any state other than docked/idle/off
         result = ['cleaning', 'returning', 'paused'].includes(entityState);
-        break;
-      case 'water_heater':
-        // Water heater is active when not off
-        result = entityState !== 'off';
         break;
       default:
         result = ['on', 'active', 'enabled', 'open', 'unlocked'].includes(entityState.toLowerCase());
@@ -750,8 +753,7 @@ export class DashboardConfig {
           }
           return localize('status.open');
         } else {
-          // opening, closing, or other transitional states
-          return entityState.charAt(0).toUpperCase() + entityState.slice(1);
+          return this.humanizeState(entityState);
         }
 
       case 'climate':
@@ -781,19 +783,8 @@ export class DashboardConfig {
       case 'sensor':
         return this.getSensorStateText(entityState, attributes);
 
-      case 'input_boolean':
-        return entityState === 'on' ? localize('status.on') : localize('status.off');
-
-      case 'button':
-      case 'input_button':
-        // Buttons show when they were last pressed or just 'Press' if never pressed
-        return localize('status.press') || 'Press';
-
       case 'vacuum':
-        return this.getVacuumStateText(entityState, attributes);
-
-      case 'water_heater':
-        return this.getWaterHeaterStateText(entityState, attributes, hass);
+        return this.getVacuumStateText(entityState);
 
       default:
         return entityState === 'on' ? localize('status.on') : localize('status.off');
@@ -817,8 +808,16 @@ export class DashboardConfig {
       case 'off':
         return localize('status.off');
       default:
-        return entityState.charAt(0).toUpperCase() + entityState.slice(1);
+        return this.humanizeState(entityState);
     }
+  }
+
+  /**
+   * Readable label for a raw HA state: "heat_cool" -> "Heat cool"
+   */
+  private static humanizeState(entityState: string): string {
+    const words = entityState.replace(/_/g, ' ');
+    return words.charAt(0).toUpperCase() + words.slice(1);
   }
 
   /**
@@ -871,7 +870,7 @@ export class DashboardConfig {
   /**
    * Get vacuum-specific state text
    */
-  private static getVacuumStateText(entityState: string, attributes: any): string {
+  private static getVacuumStateText(entityState: string): string {
     switch (entityState) {
       case 'cleaning':
         return localize('status.cleaning');
@@ -888,7 +887,7 @@ export class DashboardConfig {
       case 'off':
         return localize('status.off');
       default:
-        return entityState.charAt(0).toUpperCase() + entityState.slice(1);
+        return this.humanizeState(entityState);
     }
   }
 
@@ -901,6 +900,9 @@ export class DashboardConfig {
         return localize('status.locked');
       case 'unlocked':
         return localize('status.unlocked');
+      case 'open':
+      case 'opening':
+        return localize('status.open');
       case 'locking':
         return localize('status.locking');
       case 'unlocking':
@@ -946,88 +948,8 @@ export class DashboardConfig {
    * Get binary sensor-specific state text
    */
   private static getBinarySensorStateText(entityState: string, attributes: any): string {
-    const deviceClass = attributes.device_class;
-    const friendlyName = attributes.friendly_name;
-
-    if (entityState === 'on') {
-      switch (deviceClass) {
-        case 'motion':
-          return localize('motion.detected');
-        case 'occupancy':
-          return localize('occupancy.detected');
-        case 'door':
-        case 'window':
-        case 'opening':
-          return localize('status.open');
-        case 'garage_door':
-          return localize('status.open');
-        case 'moisture':
-        case 'gas':
-        case 'problem':
-          return localize('status.detected');
-        case 'safety':
-          return localize('status.unsafe');
-        case 'smoke':
-          return localize('smoke.detected');
-        case 'sound':
-          return localize('status.detected');
-        case 'vibration':
-          return localize('status.detected');
-        case 'lock':
-          return localize('status.locked');
-        case 'plug':
-          return localize('status.plugged_in');
-        case 'presence':
-          return localize('status.home');
-        case 'power':
-          return localize('status.on');
-        case 'running':
-          return localize('status.running');
-        case 'update':
-          return localize('status.update_available');
-        default:
-          return localize('status.on');
-      }
-    } else {
-      switch (deviceClass) {
-        case 'motion':
-          return localize('motion.not_detected');
-        case 'occupancy':
-          return localize('occupancy.not_detected');
-        case 'door':
-        case 'window':
-        case 'opening':
-          return localize('status.closed');
-        case 'garage_door':
-          return localize('status.closed');
-        case 'moisture':
-        case 'gas':
-        case 'problem':
-          return localize('status.clear');
-        case 'safety':
-          return localize('status.safe');
-        case 'smoke':
-          return localize('smoke.not_detected');
-        case 'sound':
-          return localize('status.clear');
-        case 'vibration':
-          return localize('status.clear');
-        case 'lock':
-          return localize('status.unlocked');
-        case 'plug':
-          return localize('status.unplugged');
-        case 'presence':
-          return localize('status.away');
-        case 'power':
-          return localize('status.off');
-        case 'running':
-          return localize('status.idle');
-        case 'update':
-          return localize('status.up_to_date');
-        default:
-          return localize('status.off');
-      }
-    }
+    const [onKey, offKey] = BINARY_SENSOR_TEXT[attributes.device_class] ?? ['status.on', 'status.off'];
+    return localize(entityState === 'on' ? onKey : offKey);
   }
 
   /**

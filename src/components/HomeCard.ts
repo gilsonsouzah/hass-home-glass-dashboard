@@ -1,11 +1,15 @@
 import { DashboardConfig } from '../config/DashboardConfig';
-import { SnapshotManager } from '../utils/SnapshotManager';
-import { CardConfig, EntityState } from '../types/types';
+import { CardConfig } from '../types/types';
 import { localize } from '../utils/LocalizationService';
 import { RTLHelper } from '../utils/RTLHelper';
+import { escapeHtml } from '../utils/html';
+import { asNumber, parseCodeFormat, pickHvacOnMode, stepTemperature } from '../utils/thermostat';
+
+const CAMERA_REFRESH_MS = 240000;
+const TEMPERATURE_DEBOUNCE_MS = 600;
+const ICON_TOGGLE_DOMAINS = ['humidifier', 'siren', 'valve'];
 
 export class HomeCard extends HTMLElement {
-  private config?: CardConfig;
   private _hass?: any;
   private entity?: string;
   private name?: string;
@@ -13,13 +17,11 @@ export class HomeCard extends HTMLElement {
   private isTall?: boolean;
   private defaultIcon?: string;
   private cameraView?: string;
-  private refreshInterval?: number;
-  private snapshotManager?: SnapshotManager;
-  private cameraSnapshotFailed?: boolean = false;
-  private cameraImages: HTMLImageElement[] = [];
-  private visibleImageIndex: number = 0;
   private queryTimer?: number;
-  private lastDisplayedTimestamp?: number;
+  private pendingTarget?: number;
+  private targetTimer?: number;
+  private lastHvacMode?: string;
+  private layoutKey?: string;
   private boundCardClick?: (e: Event) => void;
   private boundIconClick?: (e: Event) => void;
   private _hasRendered: boolean = false;
@@ -29,24 +31,11 @@ export class HomeCard extends HTMLElement {
   }
 
   connectedCallback() {
-    // CRITICAL FIX: Re-attach click handlers when card is reconnected to DOM
-    // This fixes the issue where cards become unclickable after navigation
-    // because disconnectedCallback removes the listeners but they weren't being re-added
-    if (this.shadowRoot && this._hass && this.entity) {
-      // Use setTimeout to ensure shadowRoot content is ready after potential re-render
-      setTimeout(() => {
-        // Check if click handlers need to be re-attached
-        const card = this.shadowRoot?.querySelector('.home-glass-card') as HTMLElement;
-        const isEditMode = this.closest('.entity-card-wrapper')?.classList.contains('edit-mode') || false;
-
-        // Only setup handlers if not in edit mode and card exists
-        if (card && !isEditMode && !this.boundCardClick) {
-          this.setupClickHandlers();
-        }
-      }, 10);
+    // cleanup() drops the listeners on disconnect; re-attach them when the node is moved back in
+    if (this.shadowRoot?.querySelector('.home-glass-card') && !this.boundCardClick) {
+      this.setupClickHandlers();
     }
-
-    // Camera cards now use direct entity_picture - no reinitialization needed
+    this.resumeCamera();
   }
 
   disconnectedCallback() {
@@ -54,14 +43,8 @@ export class HomeCard extends HTMLElement {
   }
 
   public cleanup() {
-    // Clear query timer
-    if (this.queryTimer) {
-      clearInterval(this.queryTimer);
-      this.queryTimer = undefined;
-    }
+    this.stopCameraTimer();
 
-    // Remove click event listeners and clear references
-    // This allows connectedCallback to know handlers need to be re-attached
     if (this.shadowRoot) {
       const card = this.shadowRoot.querySelector('.home-glass-card');
       const icon = this.shadowRoot.querySelector('.info-icon');
@@ -74,18 +57,8 @@ export class HomeCard extends HTMLElement {
       }
     }
 
-    // Clear the bound references so connectedCallback knows to re-attach
     this.boundCardClick = undefined;
     this.boundIconClick = undefined;
-
-    // Clean up camera resources
-    this.cameraImages.forEach((img) => {
-      img.remove();
-    });
-    this.cameraImages = [];
-
-    // Note: We don't unregister from SnapshotManager here because the camera
-    // might still be valid and we want background fetching to continue
   }
 
   static getStubConfig() {
@@ -97,14 +70,12 @@ export class HomeCard extends HTMLElement {
       throw new Error('You need to define an entity');
     }
     const entityChanged = this.entity !== config.entity;
-    this.config = config;
     this.entity = config.entity;
     this.name = config.name;
     this.domain = config.domain || config.entity.split('.')[0];
     this.isTall = config.is_tall || false;
     this.defaultIcon = (config as any).default_icon;
     this.cameraView = (config as any).camera_view;
-    this.refreshInterval = (config as any).refresh_interval || 10000;
 
     // Reset render flag if entity changed so next hass set does full render
     if (entityChanged) {
@@ -119,31 +90,16 @@ export class HomeCard extends HTMLElement {
     const oldHass = this._hass;
     this._hass = hass;
 
-    // Update snapshot manager if it exists
-    if (this.snapshotManager) {
-      this.snapshotManager.setHass(hass);
-    }
-
     if (!oldHass) {
       this.render();
     } else if (this.entity && oldHass.states[this.entity] && hass.states[this.entity]) {
-      const oldState = oldHass.states[this.entity];
-      const newState = hass.states[this.entity];
-
-      if (
-        oldState.state !== newState.state ||
-        oldState.attributes.brightness !== newState.attributes.brightness ||
-          oldState.attributes.icon !== newState.attributes.icon ||
-          oldState.attributes.friendly_name !== newState.attributes.friendly_name ||
-          oldState.attributes.current_temperature !== newState.attributes.current_temperature ||
-          oldState.attributes.temperature !== newState.attributes.temperature ||
-          JSON.stringify(oldState.attributes.rgb_color) !== JSON.stringify(newState.attributes.rgb_color)) {
-        // Use in-place update if card has already rendered (avoids full innerHTML rebuild)
+      // HA replaces the state object on every state or attribute change
+      if (oldHass.states[this.entity] !== hass.states[this.entity]) {
         if (this._hasRendered) {
           this.updateCardInPlace();
         } else {
-        this.render();
-      }
+          this.render();
+        }
       }
     } else if (this.entity && (!oldHass.states[this.entity] || !hass.states[this.entity])) {
       this.render();
@@ -195,106 +151,45 @@ export class HomeCard extends HTMLElement {
       this.attachShadow({ mode: 'open' });
     }
 
-    // For camera cards, clear the timer and image references before re-rendering
-    // The innerHTML replacement will destroy the DOM elements, so we need fresh references
     if (this.domain === 'camera' && this.cameraView === 'snapshot') {
-      if (this.queryTimer) {
-        clearInterval(this.queryTimer);
-        this.queryTimer = undefined;
-      }
-      this.cameraImages = [];
-      this.lastDisplayedTimestamp = undefined;
+      this.stopCameraTimer();
     }
 
-    // Check if we're in edit mode by looking at parent wrapper
-    const isEditMode = this.closest('.entity-card-wrapper')?.classList.contains('edit-mode') || false;
+    const isEditMode = this.isEditMode();
 
-    // Create icon or temperature display or camera snapshot
     let iconElement: string;
-    let tempText = '';
-
-    if ((this.domain === 'climate' || this.domain === 'water_heater') && typeof state.attributes.current_temperature === 'number') {
-      tempText = `${state.attributes.current_temperature.toFixed(1)}°`;
-    } else if (this.domain === 'water_heater' && state.attributes.current_temperature !== undefined) {
-      tempText = `${state.attributes.current_temperature.toFixed(1)}°`;
-    } else {
-      tempText = `--.-°`;
-    }
+    const thermostat = this.thermostatLayout(state, entityData);
+    this.layoutKey = thermostat.key;
+    this.trackHvacMode(state);
+    const currentTemp = asNumber(state.attributes.current_temperature);
 
     // Climate and Water Heater share the same card layout:
     // - Large target temp on the left
     // - Chevron up/down on the right for adjusting
     // - Current temp shown in state text below
     if (this.domain === 'climate') {
-      const isActive = state.state !== 'off';
-      const targetTemp = state.attributes.temperature;
-      // For modes like 'dry' or 'fan_only' that don't have target temp, show current temp
-      const displayTemp =
-        targetTemp !== undefined && targetTemp !== null
-          ? `${targetTemp}°`
-          : state.attributes.current_temperature !== undefined
-            ? `${state.attributes.current_temperature.toFixed(0)}°`
-            : '--°';
-      const hasTargetTemp = targetTemp !== undefined && targetTemp !== null;
-      iconElement = `
-        ${
-          isActive
-            ? `
+      const tempText = currentTemp !== null ? `${currentTemp.toFixed(1)}°` : '--.-°';
+      iconElement = thermostat.isActive
+        ? `
         <div class="thermostat-top-row climate-active">
-          <div class="thermostat-target-temp" dir="ltr">${displayTemp}</div>
-          ${
-            hasTargetTemp
-              ? `
-          <div class="thermostat-controls">
-            <button class="chevron-btn chevron-up" aria-label="Increase temperature">
-              <ha-icon icon="mdi:chevron-up"></ha-icon>
-            </button>
-            <button class="chevron-btn chevron-down" aria-label="Decrease temperature">
-              <ha-icon icon="mdi:chevron-down"></ha-icon>
-            </button>
-          </div>
-          `
-              : ''
-          }
+          <div class="thermostat-target-temp" dir="ltr">${thermostat.displayTemp}</div>
+          ${thermostat.showControls ? this.thermostatControlsHtml() : ''}
         </div>
         `
-            : `
+        : `
         <div class="info-icon temperature-display">
           <span class="temperature-text" dir="ltr">${tempText}</span>
         </div>
-        `
-        }
-      `;
+        `;
     } else if (this.domain === 'water_heater') {
-      const isActive = state.state !== 'off';
-      const targetTemp = state.attributes.temperature;
-      // For water_heater, always show target temp (even when off - shows last set value)
-      const displayTemp = targetTemp !== undefined && targetTemp !== null ? `${targetTemp}°` : tempText;
       iconElement = `
-        <div class="thermostat-top-row ${isActive ? 'water-heater-active' : 'water-heater-inactive'}">
-          <div class="thermostat-target-temp" dir="ltr">${displayTemp}</div>
-          ${
-            isActive && targetTemp !== undefined
-              ? `
-          <div class="thermostat-controls">
-            <button class="chevron-btn chevron-up" aria-label="Increase temperature">
-              <ha-icon icon="mdi:chevron-up"></ha-icon>
-            </button>
-            <button class="chevron-btn chevron-down" aria-label="Decrease temperature">
-              <ha-icon icon="mdi:chevron-down"></ha-icon>
-            </button>
-          </div>
-          `
-              : ''
-          }
+        <div class="thermostat-top-row ${thermostat.isActive ? 'water-heater-active' : 'water-heater-inactive'}">
+          <div class="thermostat-target-temp" dir="ltr">${thermostat.displayTemp}</div>
+          ${thermostat.showControls ? this.thermostatControlsHtml() : ''}
         </div>
       `;
     } else if (this.domain === 'camera' && this.cameraView === 'snapshot') {
-      const state = this._hass.states[this.entity!];
-      const cameraState = state?.state;
-
-      // Check if camera entity is unavailable
-      if (!cameraState || cameraState === 'unavailable' || cameraState === 'unknown' || cameraState === 'off') {
+      if (this.isCameraUnavailable(state)) {
         // Camera entity unavailable - show camera-off icon
         iconElement = `
           <div class="camera-icon-unavailable">
@@ -316,7 +211,7 @@ export class HomeCard extends HTMLElement {
       }
     } else {
       // Use default icon if specified, otherwise use entity icon
-      const icon = this.defaultIcon || entityData.icon;
+      const icon = escapeHtml(this.defaultIcon || entityData.icon);
 
       // For scenes, scripts, and buttons, use a button-style icon without circle
       if (
@@ -349,27 +244,19 @@ export class HomeCard extends HTMLElement {
           ${
             this.domain === 'camera' && this.cameraView === 'snapshot'
               ? (() => {
-                  const state = this._hass.states[this.entity!];
-                  const cameraState = state?.state;
-                  const entityPicture = state?.attributes?.entity_picture;
+                  const entityPicture = state.attributes?.entity_picture;
 
-                  // Show text content for unavailable cameras
-                  if (
-                    !cameraState ||
-                    cameraState === 'unavailable' ||
-                    cameraState === 'unknown' ||
-                    cameraState === 'off'
-                  ) {
+                  if (this.isCameraUnavailable(state)) {
                     return `
                 <div class="text-content camera-text">
-                  <div class="entity-name">${name}</div>
+                  <div class="entity-name">${escapeHtml(name)}</div>
                   <div class="entity-state camera-status">${localize('status_messages.unavailable')}</div>
                 </div>
               `;
                   } else if (!entityPicture) {
                     return `
                 <div class="text-content camera-text">
-                  <div class="entity-name">${name}</div>
+                  <div class="entity-name">${escapeHtml(name)}</div>
                   <div class="entity-state camera-status">${localize('camera.no_snapshot_available')}</div>
                 </div>
               `;
@@ -380,8 +267,8 @@ export class HomeCard extends HTMLElement {
                 ? ''
                 : `
           <div class="text-content">
-            <div class="entity-name">${name}</div>
-            ${this.domain === 'scene' || this.domain === 'script' || this.domain === 'button' || this.domain === 'input_button' ? '' : `<div class="entity-state">${entityData.stateText}</div>`}
+            <div class="entity-name">${escapeHtml(name)}</div>
+            ${this.domain === 'scene' || this.domain === 'script' || this.domain === 'button' || this.domain === 'input_button' ? '' : `<div class="entity-state">${escapeHtml(entityData.stateText)}</div>`}
           </div>
           `
           }
@@ -393,69 +280,75 @@ export class HomeCard extends HTMLElement {
     this.updateCSSVariables(entityData);
     this._hasRendered = true;
 
-    // Add click handlers only if not in edit mode
-    if (!isEditMode) {
-      this.setupClickHandlers();
-    }
+    this.setupClickHandlers();
 
-    // Initialize camera with signed URL if this is a camera card
     if (this.domain === 'camera' && this.cameraView === 'snapshot' && !isEditMode) {
       this.initializeCameraWithSignedUrl();
     }
   }
 
-  // Initialize camera using signed URL from HA API
-  private async initializeCameraWithSignedUrl(): Promise<void> {
-    if (!this._hass || !this.entity) return;
+  private isEditMode(): boolean {
+    return this.closest('.entity-card-wrapper')?.classList.contains('edit-mode') || false;
+  }
 
-    const state = this._hass.states[this.entity];
-    if (!state || state.state === 'unavailable' || state.state === 'unknown' || state.state === 'off') {
-      return;
+  private isCameraUnavailable(state: any): boolean {
+    return !state?.state || ['unavailable', 'unknown', 'off'].includes(state.state);
+  }
+
+  private async signCameraPath(): Promise<string | null> {
+    const result = await this._hass.callWS({
+      type: 'auth/sign_path',
+      path: `/api/camera_proxy/${this.entity}`,
+      expires: 300,
+    });
+    return result?.path ?? null;
+  }
+
+  private startCameraTimer() {
+    this.stopCameraTimer();
+    this.queryTimer = window.setInterval(() => this.refreshCameraSignedUrl(), CAMERA_REFRESH_MS);
+  }
+
+  private stopCameraTimer() {
+    if (this.queryTimer) {
+      clearInterval(this.queryTimer);
+      this.queryTimer = undefined;
     }
+  }
+
+  private async initializeCameraWithSignedUrl(): Promise<void> {
+    if (!this._hass || !this.entity || this.isCameraUnavailable(this._hass.states[this.entity])) return;
 
     try {
-      // Use HA's signPath API to get a signed URL for the camera
-      const result = await this._hass.callWS({
-        type: 'auth/sign_path',
-        path: `/api/camera_proxy/${this.entity}`,
-        expires: 300, // 5 minutes
-      });
+      const signedUrl = await this.signCameraPath();
+      // The card may have been detached while the signing request was pending
+      if (!signedUrl || !this.isConnected) return;
+      const container = this.shadowRoot?.querySelector('.camera-container');
+      if (!container) return;
 
-      if (result && result.path) {
-        const signedUrl = result.path;
-        const container = this.shadowRoot?.querySelector('.camera-container');
-        if (container) {
-          // Remove loading icon
-          const loading = container.querySelector('.camera-loading');
-          if (loading) {
-            loading.remove();
-          }
+      container.querySelector('.camera-loading')?.remove();
+      container.querySelector('.camera-stream-img')?.remove();
+      container.querySelector('.camera-icon-no-snapshot')?.remove();
 
-          // Create image element with signed URL
-          const img = document.createElement('img');
-          img.className = 'camera-stream-img';
-          img.src = signedUrl;
-          img.alt = 'Camera';
-          img.onerror = () => {
-            // On error, show camera icon
-            img.style.display = 'none';
-            const fallback = document.createElement('div');
-            fallback.className = 'camera-icon-no-snapshot';
-            fallback.innerHTML = '<ha-icon icon="mdi:camera-off"></ha-icon>';
-            container.insertBefore(fallback, container.firstChild);
-          };
+      const img = document.createElement('img');
+      img.className = 'camera-stream-img';
+      img.src = signedUrl;
+      img.alt = 'Camera';
+      img.onload = () => {
+        img.style.display = '';
+        container.querySelector('.camera-icon-no-snapshot')?.remove();
+      };
+      img.onerror = () => {
+        img.style.display = 'none';
+        if (container.querySelector('.camera-icon-no-snapshot')) return;
+        const fallback = document.createElement('div');
+        fallback.className = 'camera-icon-no-snapshot';
+        fallback.innerHTML = '<ha-icon icon="mdi:camera-off"></ha-icon>';
+        container.insertBefore(fallback, container.firstChild);
+      };
 
-          container.insertBefore(img, container.firstChild);
-
-          // Refresh the signed URL periodically (every 4 minutes)
-          if (this.queryTimer) {
-            clearInterval(this.queryTimer);
-          }
-          this.queryTimer = window.setInterval(() => {
-            this.refreshCameraSignedUrl();
-          }, 240000); // 4 minutes
-        }
-      }
+      container.insertBefore(img, container.firstChild);
+      this.startCameraTimer();
     } catch (error) {
       console.error('Error getting signed camera URL:', error);
     }
@@ -481,31 +374,33 @@ export class HomeCard extends HTMLElement {
     const forceWhiteIcons = Boolean(isInStatusContext);
     const entityData = DashboardConfig.getEntityData(state, this.domain!, this.isTall, forceWhiteIcons, this._hass);
 
-    // Update CSS custom properties - browser handles all visual changes efficiently
     this.updateCSSVariables(entityData);
 
-    // Update entity name
     const nameEl = this.shadowRoot.querySelector('.entity-name');
     if (nameEl) {
       nameEl.textContent = name;
     }
 
-    // Update state text
     const stateEl = this.shadowRoot.querySelector('.entity-state');
     if (stateEl) {
       stateEl.textContent = entityData.stateText;
     }
 
-    // Update temperature for climate/water_heater entities
     if (this.domain === 'climate' || this.domain === 'water_heater') {
-      const tempEl = this.shadowRoot.querySelector('.temperature-text');
-      if (tempEl && typeof state.attributes.current_temperature === 'number') {
-        tempEl.textContent = `${state.attributes.current_temperature.toFixed(1)}°`;
+      this.trackHvacMode(state);
+      const thermostat = this.thermostatLayout(state, entityData);
+      // on/off or target-temperature availability changed: the markup differs, rebuild it
+      if (thermostat.key !== this.layoutKey) {
+        this.render();
+        return;
       }
-    }
-
-    // Update icon if domain uses dynamic icons
-    if (this.domain !== 'camera' && this.domain !== 'climate' && this.domain !== 'water_heater') {
+      const currentTemp = asNumber(state.attributes.current_temperature);
+      const tempEl = this.shadowRoot.querySelector('.temperature-text');
+      if (tempEl) {
+        tempEl.textContent = currentTemp !== null ? `${currentTemp.toFixed(1)}°` : '--.-°';
+      }
+      this.showTargetTemp(thermostat.displayTemp);
+    } else if (this.domain !== 'camera') {
       const icon = this.defaultIcon || entityData.icon;
       const iconEl = this.shadowRoot.querySelector('.info-icon ha-icon');
       if (iconEl) {
@@ -513,252 +408,126 @@ export class HomeCard extends HTMLElement {
       }
     }
 
-    // For camera cards, only do full render if availability state changed
     if (this.domain === 'camera') {
-      const cameraState = state?.state;
       const hasUnavailableIcon = !!this.shadowRoot.querySelector('.camera-icon-unavailable');
-      const isNowUnavailable = !cameraState || cameraState === 'unavailable' || cameraState === 'unknown' || cameraState === 'off';
-
-      if (hasUnavailableIcon !== isNowUnavailable) {
+      if (hasUnavailableIcon !== this.isCameraUnavailable(state)) {
         this.render();
       }
     }
   }
 
-  // Refresh the signed URL for camera
   private async refreshCameraSignedUrl(): Promise<void> {
     if (!this._hass || !this.entity) return;
 
     try {
-      const result = await this._hass.callWS({
-        type: 'auth/sign_path',
-        path: `/api/camera_proxy/${this.entity}`,
-        expires: 300,
-      });
-
-      if (result && result.path) {
-        const img = this.shadowRoot?.querySelector('.camera-stream-img') as HTMLImageElement;
-        if (img) {
-          img.src = result.path;
-        }
+      const signedUrl = await this.signCameraPath();
+      const img = this.shadowRoot?.querySelector('.camera-stream-img') as HTMLImageElement | null;
+      if (signedUrl && img) {
+        img.src = signedUrl;
       }
     } catch (error) {
       console.error('Error refreshing signed camera URL:', error);
     }
   }
 
-  private queryAndUpdateSnapshot(): void {
-    if (!this.snapshotManager || !this.entity) {
-      return;
-    }
-
-    const snapshotData = this.snapshotManager.getSnapshot(this.entity);
-    if (!snapshotData) {
-      return;
-    }
-
-    // Check if we have a new snapshot to display
-    if (snapshotData.base64Data && snapshotData.timestamp !== this.lastDisplayedTimestamp) {
-      this.handleSnapshotReceived(snapshotData.base64Data);
-      this.lastDisplayedTimestamp = snapshotData.timestamp;
-      this.cameraSnapshotFailed = false;
-    } else if (snapshotData.hasError) {
-      this.handleCameraSnapshotFailed();
-    }
-
-    // Update timestamp display
-    this.updateCameraTimestamp();
-  }
-
-  private setupCameraImages(container: HTMLElement): void {
-    // Create exactly 2 image elements stacked on top of each other
-    for (let i = 0; i < 2; i++) {
-      const img = document.createElement('img');
-      img.className = 'camera-snapshot';
-      img.draggable = false; // Prevent native image dragging
-      img.style.cssText = `
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-radius: inherit;
-        transition: opacity 0.3s ease;
-        border: none;
-        outline: none;
-        box-shadow: none;
-        pointer-events: none;
-        -webkit-user-drag: none;
-        user-select: none;
-      `;
-
-      // Both images start hidden until we have content to show
-      img.style.opacity = '0';
-      img.style.zIndex = i === 0 ? '2' : '1';
-
-      container.appendChild(img);
-      this.cameraImages.push(img);
-    }
-  }
-
-  private handleSnapshotReceived(base64Data: string): void {
-    if (!this.cameraImages || this.cameraImages.length < 2) {
-      return;
-    }
-
-    this.cameraSnapshotFailed = false;
-
-    // Update the visible image
-    const hiddenImageIndex = this.visibleImageIndex === 0 ? 1 : 0;
-    const hiddenImage = this.cameraImages[hiddenImageIndex];
-    const visibleImage = this.cameraImages[this.visibleImageIndex];
-
-    if (!hiddenImage || !visibleImage) {
-      return;
-    }
-
-    const onLoad = () => {
-      hiddenImage.style.opacity = '1';
-      hiddenImage.style.zIndex = '2';
-      visibleImage.style.opacity = '0';
-      visibleImage.style.zIndex = '1';
-
-      this.visibleImageIndex = hiddenImageIndex;
-
-      hiddenImage.removeEventListener('load', onLoad);
-      hiddenImage.removeEventListener('error', onError);
-    };
-
-    const onError = () => {
-      hiddenImage.removeEventListener('load', onLoad);
-      hiddenImage.removeEventListener('error', onError);
-    };
-
-    hiddenImage.addEventListener('load', onLoad);
-    hiddenImage.addEventListener('error', onError);
-
-    hiddenImage.src = base64Data;
-  }
-
-  private cleanupCamera(): void {
-    // Clear query timer
-    if (this.queryTimer) {
-      clearInterval(this.queryTimer);
-      this.queryTimer = undefined;
-    }
-
-    // Remove camera images from DOM
-    this.cameraImages.forEach((img) => {
-      img.remove();
-    });
-    this.cameraImages = [];
-
-    // Reset display state
-    this.lastDisplayedTimestamp = undefined;
-
-    // Only unregister from SnapshotManager if camera is actually unavailable
-    // Don't unregister during navigation - preserve the background fetching
-    if (this._hass && this.entity) {
-      const state = this._hass.states[this.entity];
-      const cameraState = state?.state;
-
-      if (!cameraState || cameraState === 'unavailable' || cameraState === 'unknown' || cameraState === 'off') {
-        // Camera is truly unavailable - unregister it
-        if (this.snapshotManager) {
-          this.snapshotManager.unregisterCamera(this.entity);
-        }
-        this.snapshotManager = undefined;
-      }
-    } else {
-      // No hass or entity - safe to fully cleanup
-      if (this.snapshotManager && this.entity) {
-        this.snapshotManager.unregisterCamera(this.entity);
-      }
-      this.snapshotManager = undefined;
-    }
-  }
-
   private setupClickHandlers() {
     const card = this.shadowRoot!.querySelector('.home-glass-card') as HTMLElement;
     const icon = this.shadowRoot!.querySelector('.info-icon') as HTMLElement;
-    const chevronUpBtn = this.shadowRoot!.querySelector('.chevron-up') as HTMLElement;
-    const chevronDownBtn = this.shadowRoot!.querySelector('.chevron-down') as HTMLElement;
 
-    // Store bound references for cleanup
     this.boundCardClick = this.handleCardClick.bind(this);
     this.boundIconClick = this.handleIconClick.bind(this);
 
-    if (card) {
-      card.addEventListener('click', this.boundCardClick);
-    }
+    card?.addEventListener('click', this.boundCardClick);
+    icon?.addEventListener('click', this.boundIconClick);
+  }
 
-    if (icon) {
-      icon.addEventListener('click', this.boundIconClick);
-    }
+  private thermostatLayout(state: any, entityData: { isActive: boolean }) {
+    const target = asNumber(state.attributes.temperature);
+    const current = asNumber(state.attributes.current_temperature);
+    const isClimate = this.domain === 'climate';
+    const fallbackTemp =
+      current === null ? (isClimate ? '--°' : '--.-°') : `${current.toFixed(isClimate ? 0 : 1)}°`;
+    const isActive = entityData.isActive;
+    const showControls = isActive && target !== null;
+    return {
+      isActive,
+      showControls,
+      displayTemp: target !== null ? `${target}°` : fallbackTemp,
+      key: `${isActive}|${showControls}`,
+    };
+  }
 
-    // Add temperature control handlers for climate and water_heater
-    if (chevronUpBtn) {
-      chevronUpBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.adjustTemperature(1);
-      });
-    }
+  private thermostatControlsHtml(): string {
+    return `
+          <div class="thermostat-controls">
+            <button class="chevron-btn chevron-up" aria-label="Increase temperature">
+              <ha-icon icon="mdi:chevron-up"></ha-icon>
+            </button>
+            <button class="chevron-btn chevron-down" aria-label="Decrease temperature">
+              <ha-icon icon="mdi:chevron-down"></ha-icon>
+            </button>
+          </div>
+          `;
+  }
 
-    if (chevronDownBtn) {
-      chevronDownBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.adjustTemperature(-1);
-      });
+  /** A target the user just tapped is shown until it is sent, so incoming state must not overwrite it. */
+  private showTargetTemp(text: string) {
+    if (this.pendingTarget !== undefined) return;
+    const el = this.shadowRoot?.querySelector('.thermostat-target-temp');
+    if (el) el.textContent = text;
+  }
+
+  private trackHvacMode(state: any) {
+    if (this.domain === 'climate' && state.state !== 'off' && state.state !== 'unavailable' && state.state !== 'unknown') {
+      this.lastHvacMode = state.state;
     }
   }
 
   private adjustTemperature(delta: number) {
     if (!this._hass || !this.entity) return;
-
-    const domain = this.entity.split('.')[0];
     const state = this._hass.states[this.entity];
     if (!state) return;
 
-    const currentTarget = state.attributes.temperature;
-    if (currentTarget === undefined || currentTarget === null) return;
+    const base = this.pendingTarget ?? asNumber(state.attributes.temperature);
+    if (base === null) return;
 
-    const minTemp = state.attributes.min_temp || 7;
-    const maxTemp = state.attributes.max_temp || 35;
-    const step = state.attributes.target_temp_step || 1;
+    const { target_temp_step, min_temp, max_temp } = state.attributes;
+    this.pendingTarget = stepTemperature(base, delta, target_temp_step, min_temp, max_temp);
 
-    const newTemp = Math.min(maxTemp, Math.max(minTemp, currentTarget + delta * step));
-
-    // Optimistic UI update - update display immediately before server response
     const tempDisplay = this.shadowRoot?.querySelector('.thermostat-target-temp');
     if (tempDisplay) {
-      tempDisplay.textContent = `${newTemp}°`;
+      tempDisplay.textContent = `${this.pendingTarget}°`;
     }
 
-    if (domain === 'climate') {
-      this._hass.callService('climate', 'set_temperature', {
+    window.clearTimeout(this.targetTimer);
+    this.targetTimer = window.setTimeout(() => this.commitTemperature(), TEMPERATURE_DEBOUNCE_MS);
+  }
+
+  private async commitTemperature() {
+    const temperature = this.pendingTarget;
+    this.targetTimer = undefined;
+    if (temperature === undefined || !this._hass || !this.entity) return;
+
+    try {
+      await this._hass.callService(this.entity.split('.')[0], 'set_temperature', {
         entity_id: this.entity,
-        temperature: newTemp,
+        temperature,
       });
-    } else if (domain === 'water_heater') {
-      this._hass.callService('water_heater', 'set_temperature', {
-        entity_id: this.entity,
-        temperature: newTemp,
-      });
+    } catch (error) {
+      console.error('Failed to set temperature:', error);
+    } finally {
+      // A tap made while the call was in flight owns pendingTarget now; its own commit will clear it
+      if (this.pendingTarget === temperature) {
+        this.pendingTarget = undefined;
+        // On success HA's state update already matches; on failure this restores the real target
+        this.updateCardInPlace();
+      }
     }
   }
 
   // Public method to force re-render when edit mode changes
   public refreshEditMode() {
-    const isEditMode = this.closest('.entity-card-wrapper')?.classList.contains('edit-mode') || false;
-      const card = this.shadowRoot?.querySelector('.home-glass-card');
-      if (card) {
-        if (isEditMode) {
-          card.classList.add('edit-mode');
-        } else {
-          card.classList.remove('edit-mode');
-        }
-      }
+    this.shadowRoot?.querySelector('.home-glass-card')?.classList.toggle('edit-mode', this.isEditMode());
   }
 
   private renderErrorState(message: string) {
@@ -792,8 +561,8 @@ export class HomeCard extends HTMLElement {
         }
       </style>
       <div class="error-card">
-        <div class="error-text">${message}</div>
-        <div class="entity-text">${this.entity}</div>
+        <div class="error-text">${escapeHtml(message)}</div>
+        <div class="entity-text">${escapeHtml(this.entity)}</div>
       </div>
     `;
   }
@@ -1028,11 +797,6 @@ export class HomeCard extends HTMLElement {
         display: none;
       }
 
-      /* Show simple temperature for regular design water heater */
-      :host(.regular-design) .water-heater-display {
-        display: flex;
-      }
-
       .text-content {
         flex: 1;
         min-width: 0;
@@ -1113,19 +877,6 @@ export class HomeCard extends HTMLElement {
         flex: 1;
       }
 
-      .camera-snapshot {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        transition: opacity 0.3s ease;
-        border: none;
-        outline: none;
-        -webkit-user-drag: none;
-        user-select: none;
-        pointer-events: none;
-        -webkit-touch-callout: none;
-      }
-
       /* Direct camera stream image */
       .camera-stream-img {
         position: absolute;
@@ -1140,10 +891,6 @@ export class HomeCard extends HTMLElement {
         -webkit-user-drag: none;
         user-select: none;
         pointer-events: none;
-      }
-
-      .camera-fallback {
-        display: none;
       }
 
       .camera-overlay {
@@ -1167,14 +914,6 @@ export class HomeCard extends HTMLElement {
         border-radius: 4px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-      }
-
-      .camera-timestamp {
-        font-size: clamp(10px, 2.5vw, 12px);
-        font-weight: 600;
-        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
-        color: white;
-        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
       }
 
       /* RTL Support for camera overlay positioning */
@@ -1208,53 +947,9 @@ export class HomeCard extends HTMLElement {
         right: 10px;
       }
 
-      /* Camera icon when unavailable - positioned 10px from top and left */
-      .camera-icon-unavailable {
-        color: var(--card-icon-color);
-        background: transparent;
-        transition: color 0.2s ease, opacity 0.2s ease;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-sizing: border-box;
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        z-index: 2;
-      }
-
-      .camera-icon-unavailable ha-icon {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        --mdc-icon-size: clamp(24px, 6vw, 32px);
-      }
-
-      /* Camera icon when no snapshot available - positioned 10px from top and left */
-      .camera-icon-no-snapshot {
-        color: var(--card-icon-color);
-        background: transparent;
-        transition: color 0.2s ease, opacity 0.2s ease;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-sizing: border-box;
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        z-index: 2;
-      }
-
-      .camera-icon-no-snapshot ha-icon {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        --mdc-icon-size: clamp(24px, 6vw, 32px);
-      }
-
-      /* Camera loading state - matches camera error states */
+      /* Camera status icons (unavailable, no snapshot, loading) - positioned 10px from top and left */
+      .camera-icon-unavailable,
+      .camera-icon-no-snapshot,
       .camera-loading {
         color: var(--card-icon-color);
         background: transparent;
@@ -1270,6 +965,8 @@ export class HomeCard extends HTMLElement {
         z-index: 2;
       }
 
+      .camera-icon-unavailable ha-icon,
+      .camera-icon-no-snapshot ha-icon,
       .camera-loading ha-icon {
         display: flex;
         align-items: center;
@@ -1313,100 +1010,7 @@ export class HomeCard extends HTMLElement {
     `;
   }
 
-  private handleCardClick(event: Event) {
-    if (!this._hass || !this.entity) return;
-
-    // Check if the click was on the icon or thermostat controls - if so, don't handle it here
-    const target = event.target as HTMLElement;
-    if (target.closest('.info-icon') || target.closest('.thermostat-controls')) {
-      return;
-    }
-
-    const domain = this.entity.split('.')[0];
-
-    // For lights, toggle directly on card click
-    if (domain === 'light') {
-      this._hass.callService('light', 'toggle', { entity_id: this.entity });
-      return;
-    }
-
-    // For climate, toggle on/off - always use 'cool' mode
-    if (domain === 'climate') {
-      const state = this._hass.states[this.entity];
-      if (state?.state === 'off') {
-        // Turn on - always use 'cool' mode
-        this._hass.callService('climate', 'set_hvac_mode', {
-          entity_id: this.entity,
-          hvac_mode: 'cool',
-        });
-      } else {
-        // Turn off
-        this._hass.callService('climate', 'set_hvac_mode', {
-          entity_id: this.entity,
-          hvac_mode: 'off',
-        });
-      }
-      return;
-    }
-
-    // For water_heater, toggle on/off using operation_mode
-    if (domain === 'water_heater') {
-      const state = this._hass.states[this.entity];
-      const operationList = state?.attributes?.operation_list || [];
-      const currentMode = state?.attributes?.operation_mode;
-
-      if (currentMode === 'off' || state?.state === 'off') {
-        // Turn on - use first available mode that is not 'off'
-        const availableModes = operationList.filter((mode: string) => mode !== 'off');
-        const targetMode = availableModes.length > 0 ? availableModes[0] : 'gas';
-        this._hass.callService('water_heater', 'set_operation_mode', {
-          entity_id: this.entity,
-          operation_mode: targetMode,
-        });
-      } else {
-        // Turn off
-        this._hass.callService('water_heater', 'set_operation_mode', {
-          entity_id: this.entity,
-          operation_mode: 'off',
-        });
-      }
-      return;
-    }
-
-    // For locks, toggle lock/unlock on card click
-    if (domain === 'lock') {
-      const state = this._hass.states[this.entity];
-      const lockState = state?.state;
-      // Ignore if in transitional state (locking/unlocking)
-      if (lockState === 'locking' || lockState === 'unlocking') {
-        return;
-      }
-      // Determine the action based on current state
-      const action = lockState === 'locked' ? 'unlock' : 'lock';
-      // If lock requires a code, show modal to enter code
-      if (state?.attributes?.code_format) {
-        this.showLockCodeModal(this.entity, action, state.attributes.code_format);
-        return;
-      }
-      // Toggle based on current state - if locked, unlock; otherwise lock
-      // Use try/catch to handle locks that require code but don't have code_format
-      this.tryLockAction(this.entity, action);
-      return;
-    }
-
-    // For scenes, activate on card click
-    if (domain === 'scene') {
-      this._hass.callService('scene', 'turn_on', { entity_id: this.entity });
-      return;
-    }
-
-    // For scripts, run on card click
-    if (domain === 'script') {
-      this._hass.callService('script', 'turn_on', { entity_id: this.entity });
-      return;
-    }
-
-    // Open more-info dialog for other domains
+  private openMoreInfo() {
     this.dispatchEvent(
       new CustomEvent('hass-more-info', {
         bubbles: true,
@@ -1416,69 +1020,113 @@ export class HomeCard extends HTMLElement {
     );
   }
 
+  private toggleLock(entityId: string) {
+    const state = this._hass.states[entityId];
+    // Ignore if in transitional state (locking/unlocking)
+    if (state?.state === 'locking' || state?.state === 'unlocking') return;
+
+    const action = state?.state === 'locked' ? 'unlock' : 'lock';
+    if (state?.attributes?.code_format) {
+      this.showLockCodeModal(entityId, action, state.attributes.code_format);
+      return;
+    }
+    // Locks that require a code without advertising code_format fail here and open the modal
+    this.tryLockAction(entityId, action);
+  }
+
+  private toggleClimate(entityId: string) {
+    const state = this._hass.states[entityId];
+    if (!state || state.state === 'unavailable' || state.state === 'unknown') return;
+
+    if (state.state !== 'off') {
+      this._hass.callService('climate', 'set_hvac_mode', { entity_id: entityId, hvac_mode: 'off' });
+      return;
+    }
+    const mode = pickHvacOnMode(this.lastHvacMode, state.attributes.hvac_modes);
+    if (mode) {
+      this._hass.callService('climate', 'set_hvac_mode', { entity_id: entityId, hvac_mode: mode });
+    } else {
+      this._hass.callService('climate', 'turn_on', { entity_id: entityId });
+    }
+  }
+
+  private handleCardClick(event: Event) {
+    if (!this._hass || !this.entity || this.isEditMode()) return;
+
+    const target = event.target as HTMLElement;
+    const chevron = target.closest('.chevron-btn');
+    if (chevron) {
+      this.adjustTemperature(chevron.classList.contains('chevron-up') ? 1 : -1);
+      return;
+    }
+    // The icon has its own handler
+    if (target.closest('.info-icon')) {
+      return;
+    }
+
+    const domain = this.entity.split('.')[0];
+
+    switch (domain) {
+      case 'light':
+        this._hass.callService('light', 'toggle', { entity_id: this.entity });
+        return;
+      case 'climate':
+        this.toggleClimate(this.entity);
+        return;
+      case 'water_heater': {
+        const state = this._hass.states[this.entity];
+        if (state?.attributes?.operation_mode === 'off' || state?.state === 'off') {
+          // Turn on - use first available mode that is not 'off'
+          const availableModes = (state?.attributes?.operation_list || []).filter((mode: string) => mode !== 'off');
+          this._hass.callService('water_heater', 'set_operation_mode', {
+            entity_id: this.entity,
+            operation_mode: availableModes.length > 0 ? availableModes[0] : 'gas',
+          });
+        } else {
+          this._hass.callService('water_heater', 'set_operation_mode', {
+            entity_id: this.entity,
+            operation_mode: 'off',
+          });
+        }
+        return;
+      }
+      case 'lock':
+        this.toggleLock(this.entity);
+        return;
+      case 'scene':
+      case 'script':
+        this._hass.callService(domain, 'turn_on', { entity_id: this.entity });
+        return;
+    }
+    this.openMoreInfo();
+  }
+
   private handleIconClick(event: Event) {
     if (!this._hass || !this.entity) return;
 
     // Prevent the card click from firing
     event.stopPropagation();
+    if (this.isEditMode()) return;
 
     const domain = this.entity.split('.')[0];
     const entityId = this.entity;
 
-    // Handle different domains for icon clicks (toggle behavior)
     switch (domain) {
       case 'light':
       case 'switch':
       case 'fan':
+      case 'input_boolean':
         this._hass.callService(domain, 'toggle', { entity_id: entityId });
         break;
       case 'cover':
-        const coverState = this._hass.states[entityId]?.state;
-        if (coverState === 'open') {
-          this._hass.callService('cover', 'close_cover', { entity_id: entityId });
-        } else {
-          this._hass.callService('cover', 'open_cover', { entity_id: entityId });
-        }
+        this._hass.callService('cover', this._hass.states[entityId]?.state === 'open' ? 'close_cover' : 'open_cover', {
+          entity_id: entityId,
+        });
         break;
       case 'lock':
-        const lockState = this._hass.states[entityId]?.state;
-        const lockAttrs = this._hass.states[entityId]?.attributes;
-        // Ignore if in transitional state (locking/unlocking)
-        if (lockState === 'locking' || lockState === 'unlocking') {
-          break;
-        }
-        // Determine the action based on current state
-        const lockAction = lockState === 'locked' ? 'unlock' : 'lock';
-        // If lock requires a code, show modal to enter code
-        if (lockAttrs?.code_format) {
-          this.showLockCodeModal(entityId, lockAction, lockAttrs.code_format);
-          break;
-        }
-        // Toggle based on current state - if locked, unlock; otherwise lock
-        // Use try/catch to handle locks that require code but don't have code_format
-        this.tryLockAction(entityId, lockAction);
+        this.toggleLock(entityId);
         break;
-      case 'climate':
-        // For climate, icon click opens more-info (since it's just showing temperature)
-        this.dispatchEvent(
-          new CustomEvent('hass-more-info', {
-            bubbles: true,
-            composed: true,
-            detail: { entityId },
-          })
-        );
-        break;
-      case 'water_heater':
-        // For water heater, icon click opens more-info (since it's just showing temperature)
-        this.dispatchEvent(
-          new CustomEvent('hass-more-info', {
-            bubbles: true,
-            composed: true,
-            detail: { entityId },
-          })
-        );
-        break;
-      case 'media_player':
+      case 'media_player': {
         const mediaState = this._hass.states[entityId]?.state;
         if (mediaState === 'playing') {
           this._hass.callService('media_player', 'media_pause', { entity_id: entityId });
@@ -1488,81 +1136,23 @@ export class HomeCard extends HTMLElement {
           this._hass.callService('media_player', 'turn_on', { entity_id: entityId });
         }
         break;
+      }
       case 'scene':
-        this._hass.callService('scene', 'turn_on', { entity_id: entityId });
-        break;
       case 'script':
-        this._hass.callService('script', 'turn_on', { entity_id: entityId });
+        this._hass.callService(domain, 'turn_on', { entity_id: entityId });
         break;
       case 'button':
-        this._hass.callService('button', 'press', { entity_id: entityId });
-        break;
       case 'input_button':
-        this._hass.callService('input_button', 'press', { entity_id: entityId });
-        break;
-      case 'input_boolean':
-        this._hass.callService('input_boolean', 'toggle', { entity_id: entityId });
-        break;
-      case 'camera':
-        // For cameras, open more-info to show live feed
-        this.dispatchEvent(
-          new CustomEvent('hass-more-info', {
-            bubbles: true,
-            composed: true,
-            detail: { entityId },
-          })
-        );
+        this._hass.callService(domain, 'press', { entity_id: entityId });
         break;
       default:
-        // For unknown domains, icon click toggles if possible, otherwise opens more-info
-        if (['binary_sensor', 'sensor'].includes(domain)) {
-          // Read-only entities open more-info
-          this.dispatchEvent(
-            new CustomEvent('hass-more-info', {
-              bubbles: true,
-              composed: true,
-              detail: { entityId },
-            })
-          );
-        } else {
-          // Try to toggle
+        // Only domains with a plain toggle service are toggled; everything else (climate, camera,
+        // sensors, alarm panels, vacuums, selects...) has no meaningful toggle and opens more-info
+        if (ICON_TOGGLE_DOMAINS.includes(domain)) {
           this._hass.callService('homeassistant', 'toggle', { entity_id: entityId });
+        } else {
+          this.openMoreInfo();
         }
-    }
-  }
-
-  private updateCameraTimestamp() {
-    const timestampElement = this.shadowRoot?.querySelector('.camera-timestamp') as HTMLElement;
-    if (timestampElement && this.snapshotManager && this.entity) {
-      const snapshotData = this.snapshotManager.getSnapshot(this.entity);
-
-      // Only show timestamp if we have actual snapshot data
-      if (snapshotData && snapshotData.base64Data && snapshotData.timestamp > 0) {
-        const secondsAgo = this.snapshotManager.getSecondsAgo(this.entity);
-        timestampElement.textContent = this.formatTimeAgo(secondsAgo);
-        timestampElement.style.display = '';
-      } else {
-        // Hide timestamp until we have real data
-        timestampElement.style.display = 'none';
-      }
-    }
-  }
-
-  private formatTimeAgo(secondsAgo: number): string {
-    const diffMins = Math.floor(secondsAgo / 60);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (secondsAgo <= 0) {
-      return 'now';
-    } else if (secondsAgo < 60) {
-      return `${secondsAgo}s`;
-    } else if (diffMins < 60) {
-      return `${diffMins}m`;
-    } else if (diffHours < 24) {
-      return `${diffHours}h`;
-    } else {
-      return `${diffDays}d`;
     }
   }
 
@@ -1570,44 +1160,26 @@ export class HomeCard extends HTMLElement {
     return 1;
   }
 
-  private handleCameraSnapshotFailed() {
-    if (this.cameraSnapshotFailed) return;
-    this.cameraSnapshotFailed = true;
-    // Clear the query timer to stop retries
-    if (this.queryTimer) {
-      clearInterval(this.queryTimer);
-      this.queryTimer = undefined;
-    }
-    // Re-render to show "No snapshot available" state
-    this.render();
-  }
-
   public pauseCamera() {
     if (this.domain !== 'camera') return;
-    if (this.queryTimer) {
-      clearInterval(this.queryTimer);
-      this.queryTimer = undefined;
-    }
+    this.stopCameraTimer();
   }
 
   public resumeCamera() {
-    if (this.domain !== 'camera' || !this._hass || this.cameraSnapshotFailed) return;
-    if (this.queryTimer) return; // already running
+    if (this.domain !== 'camera' || !this._hass || this.queryTimer) return;
+    if (!this.shadowRoot?.querySelector('.camera-stream-img')) return;
     this.refreshCameraSignedUrl();
-    this.queryTimer = window.setInterval(() => this.refreshCameraSignedUrl(), 240000);
+    this.startCameraTimer();
   }
 
   public reloadCameraImage() {
     if (this.domain === 'camera' && this.cameraView === 'snapshot' && this._hass) {
-      // Clean up existing setup
-      this.cleanupCamera();
-
-      // Reinitialize camera with signed URL
+      this.stopCameraTimer();
       this.initializeCameraWithSignedUrl();
     }
   }
 
-  private showLockCodeModal(entityId: string, action: 'lock' | 'unlock', _codeFormat: string) {
+  private showLockCodeModal(entityId: string, action: 'lock' | 'unlock', codeFormat: string) {
     // Remove any existing modal
     const existingModal = document.querySelector('.lock-code-modal-overlay');
     if (existingModal) {
@@ -1616,6 +1188,7 @@ export class HomeCard extends HTMLElement {
 
     const state = this._hass?.states[entityId];
     const friendlyName = state?.attributes?.friendly_name || entityId.split('.')[1].replace(/_/g, ' ');
+    const format = parseCodeFormat(codeFormat);
     const actionText = action === 'unlock' ? localize('lock_modal.unlock') : localize('lock_modal.lock');
     const cancelText = localize('lock_modal.cancel');
     const actionColor = action === 'unlock' ? '#34c759' : '#ff9500';
@@ -1704,6 +1277,18 @@ export class HomeCard extends HTMLElement {
         .lock-code-dot.filled {
           background: ${actionColor};
           transform: scale(1.1);
+        }
+        .lock-code-input {
+          width: 100%;
+          box-sizing: border-box;
+          padding: 14px 16px;
+          margin-bottom: 8px;
+          border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          background: rgba(255, 255, 255, 0.1);
+          color: #ffffff;
+          font-size: 18px;
+          text-align: center;
         }
         .lock-code-error {
           color: #ff453a;
@@ -1807,17 +1392,12 @@ export class HomeCard extends HTMLElement {
               ${action === 'unlock' ? '<path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2m6-9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h9V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3H7a5 5 0 0 1 5-5 5 5 0 0 1 5 5v2h1z"/>' : '<path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2m6-9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h1V6a5 5 0 0 1 5-5 5 5 0 0 1 5 5v2h1m-6-5a3 3 0 0 0-3 3v2h6V6a3 3 0 0 0-3-3z"/>'}
             </svg>
           </div>
-          <div class="lock-code-title">${friendlyName}</div>
-          <div class="lock-code-subtitle">${actionText}</div>
+          <div class="lock-code-title">${escapeHtml(friendlyName)}</div>
+          <div class="lock-code-subtitle">${escapeHtml(actionText)}</div>
         </div>
-        <div class="lock-code-display">
-          <div class="lock-code-dot"></div>
-          <div class="lock-code-dot"></div>
-          <div class="lock-code-dot"></div>
-          <div class="lock-code-dot"></div>
-          <div class="lock-code-dot"></div>
-          <div class="lock-code-dot"></div>
-        </div>
+        ${
+          format.numeric
+            ? `<div class="lock-code-display"></div>
         <div class="lock-code-error"></div>
         <div class="lock-code-keypad">
           <button class="lock-code-key" data-key="1">1</button>
@@ -1829,14 +1409,18 @@ export class HomeCard extends HTMLElement {
           <button class="lock-code-key" data-key="7">7</button>
           <button class="lock-code-key" data-key="8">8</button>
           <button class="lock-code-key" data-key="9">9</button>
-          <button class="lock-code-key action cancel" data-key="cancel">${cancelText}</button>
+          <button class="lock-code-key action cancel" data-key="cancel">${escapeHtml(cancelText)}</button>
           <button class="lock-code-key" data-key="0">0</button>
-          <button class="lock-code-key backspace" data-key="backspace">
+          <button class="lock-code-key backspace" data-key="backspace" aria-label="Backspace">
             <svg viewBox="0 0 24 24"><path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z"/></svg>
           </button>
-        </div>
+        </div>`
+            : `<input class="lock-code-input" type="password" autocomplete="off" aria-label="${escapeHtml(localize('lock_modal.enter_code'))}">
+        <div class="lock-code-error"></div>`
+        }
         <div class="lock-code-actions">
-          <button class="lock-code-btn lock-code-btn-confirm" disabled>${actionText}</button>
+          ${format.numeric ? '' : `<button class="lock-code-btn lock-code-btn-cancel" data-key="cancel">${escapeHtml(cancelText)}</button>`}
+          <button class="lock-code-btn lock-code-btn-confirm" disabled>${escapeHtml(actionText)}</button>
         </div>
       </div>
     `;
@@ -1844,29 +1428,38 @@ export class HomeCard extends HTMLElement {
     document.body.appendChild(modalOverlay);
 
     let code = '';
-    const maxLength = 6;
-    const dots = modalOverlay.querySelectorAll('.lock-code-dot');
+    const maxLength = format.length ?? Infinity;
+    const display = modalOverlay.querySelector('.lock-code-display');
+    const input = modalOverlay.querySelector('.lock-code-input') as HTMLInputElement | null;
     const errorDiv = modalOverlay.querySelector('.lock-code-error') as HTMLElement;
     const confirmBtn = modalOverlay.querySelector('.lock-code-btn-confirm') as HTMLButtonElement;
 
     const updateDisplay = () => {
-      dots.forEach((dot, i) => {
-        dot.classList.toggle('filled', i < code.length);
-      });
+      if (display) {
+        const dots = Math.max(format.length ?? 0, code.length);
+        display.innerHTML = Array.from(
+          { length: dots },
+          (_, i) => `<div class="lock-code-dot${i < code.length ? ' filled' : ''}"></div>`
+        ).join('');
+      }
       confirmBtn.disabled = code.length === 0;
     };
+    updateDisplay();
+    input?.focus();
+    input?.addEventListener('input', () => {
+      code = input.value;
+      errorDiv.textContent = '';
+      updateDisplay();
+    });
 
-    // Close modal function
     const closeModal = () => {
       modalOverlay.style.animation = 'lockModalFadeIn 0.2s ease-out reverse';
       setTimeout(() => modalOverlay.remove(), 150);
     };
 
-    // Handle keypad clicks
-    modalOverlay.querySelectorAll('.lock-code-key').forEach((key) => {
+    modalOverlay.querySelectorAll('[data-key]').forEach((key) => {
       key.addEventListener('click', (e) => {
-        const target = e.currentTarget as HTMLElement;
-        const keyValue = target.dataset.key;
+        const keyValue = (e.currentTarget as HTMLElement).dataset.key;
         errorDiv.textContent = '';
 
         if (keyValue === 'cancel') {
@@ -1888,6 +1481,11 @@ export class HomeCard extends HTMLElement {
         return;
       }
 
+      if (format.pattern && !format.pattern.test(code)) {
+        errorDiv.textContent = localize('lock_modal.invalid_code');
+        return;
+      }
+
       confirmBtn.disabled = true;
       confirmBtn.textContent = '...';
       errorDiv.textContent = '';
@@ -1903,6 +1501,7 @@ export class HomeCard extends HTMLElement {
         confirmBtn.textContent = actionText;
         // Clear code on error
         code = '';
+        if (input) input.value = '';
         updateDisplay();
         errorDiv.textContent = err?.message || localize('lock_modal.error');
       }
@@ -1923,11 +1522,13 @@ export class HomeCard extends HTMLElement {
       }
       if (e.key === 'Escape') {
         closeModal();
+      } else if (e.key === 'Enter' && code.length > 0) {
+        handleConfirm();
+      } else if (!format.numeric) {
+        // the text input handles its own typing
       } else if (e.key === 'Backspace') {
         code = code.slice(0, -1);
         updateDisplay();
-      } else if (e.key === 'Enter' && code.length > 0) {
-        handleConfirm();
       } else if (/^\d$/.test(e.key) && code.length < maxLength) {
         code += e.key;
         updateDisplay();
