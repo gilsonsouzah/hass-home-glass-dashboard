@@ -23,14 +23,17 @@ import {
 } from '../settings/settingsTemplate';
 import { SETTINGS_CSS, SETTINGS_STYLE_ID } from '../settings/settingsStyles';
 import { applyUploadedWallpaper, openPresetsView, updateWallpaperPreview } from '../settings/wallpaperPicker';
+import { openModal } from '../settings/modalStack';
+import { applySolidSurfaces } from '../settings/solidSurfaces';
 
 export type { HomeSettingsData } from '../settings/settingsData';
 
 const MODAL_FADE_MS = 300;
 
-const TOGGLES: Array<{ id: string; key: 'hideHeader' | 'hideSidebar' | 'showSwitches' | 'showEnergy' | 'showCost' | 'showGas' }> = [
+const TOGGLES: Array<{ id: string; key: 'hideHeader' | 'hideSidebar' | 'solidSurfaces' | 'showSwitches' | 'showEnergy' | 'showCost' | 'showGas' }> = [
   { id: 'header-toggle', key: 'hideHeader' },
   { id: 'sidebar-toggle', key: 'hideSidebar' },
+  { id: 'solid-toggle', key: 'solidSurfaces' },
   { id: 'switches-toggle', key: 'showSwitches' },
   { id: 'energy-toggle', key: 'showEnergy' },
   { id: 'cost-toggle', key: 'showCost' },
@@ -40,6 +43,7 @@ const TOGGLES: Array<{ id: string; key: 'hideHeader' | 'hideSidebar' | 'showSwit
 export class HomeSettingsManager {
   private modal?: HTMLElement;
   private listenersAbort?: AbortController;
+  private releaseModal?: () => void;
   private customizationManager: CustomizationManager;
   private backgroundManager?: BackgroundManager;
   private onSaveCallback: () => void;
@@ -112,7 +116,8 @@ export class HomeSettingsManager {
 
     this.setupAutocomplete();
     this.modal.addEventListener('click', (e) => this.handleRemoveClick(e), { signal });
-    document.addEventListener('keydown', this.handleEscapeKey, { signal });
+    this.modal.addEventListener('keydown', (e) => this.handleActivationKey(e), { signal });
+    this.releaseModal = openModal(this.modal, () => this.closeModal());
 
     this.setupBackgroundEventListeners();
   }
@@ -309,7 +314,19 @@ export class HomeSettingsManager {
   }
 
   private updateUIToggle(toggleId: string, isActive: boolean) {
-    this.modal?.querySelector(`#${toggleId}`)?.classList.toggle('active', isActive);
+    const toggle = this.modal?.querySelector(`#${toggleId}`);
+    toggle?.classList.toggle('active', isActive);
+    toggle?.setAttribute('aria-checked', String(isActive));
+  }
+
+  // Switches, wallpaper rows and chip remove icons are not native buttons.
+  private handleActivationKey(e: KeyboardEvent) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const target = e.target as HTMLElement;
+    if (target.matches('.ui-setting-toggle, .wallpaper-option-row, .remove-entity')) {
+      e.preventDefault();
+      target.click();
+    }
   }
 
   private initializeUIToggles() {
@@ -341,6 +358,8 @@ export class HomeSettingsManager {
   private teardownModal() {
     this.listenersAbort?.abort();
     this.listenersAbort = undefined;
+    this.releaseModal?.();
+    this.releaseModal = undefined;
     document.body.style.overflow = '';
     this.modal?.remove();
     this.modal = undefined;
@@ -363,6 +382,7 @@ export class HomeSettingsManager {
       console.error('Error saving settings:', error);
     }
 
+    applySolidSurfaces(this.settings.solidSurfaces === true);
     this.applyVisualChanges();
 
     setTimeout(() => {
@@ -392,16 +412,6 @@ export class HomeSettingsManager {
     );
     await this.customizationManager.batchSetCustomizations(sections);
   }
-
-  private handleEscapeKey = (e: KeyboardEvent) => {
-    if (e.key !== 'Escape') return;
-    const presetsCancel = document.querySelector('.presets-selection-modal .modal-cancel');
-    if (presetsCancel) {
-      presetsCancel.dispatchEvent(new MouseEvent('click'));
-      return;
-    }
-    this.closeModal();
-  };
 
   public destroy() {
     this.closeModal();
