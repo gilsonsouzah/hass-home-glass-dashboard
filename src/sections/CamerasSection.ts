@@ -5,7 +5,9 @@ import { DashboardConfig } from '../config/DashboardConfig';
 import { localize } from '../utils/LocalizationService';
 import { RTLHelper } from '../utils/RTLHelper';
 import { escapeHtml } from '../utils/html';
+import { navigateToDashboardPath } from './navigation';
 import { setupDragScroll } from './dragScroll';
+import { splitBySavedOrder } from './carouselOrder';
 
 export class CamerasSection {
   private customizationManager: CustomizationManager;
@@ -26,7 +28,7 @@ export class CamerasSection {
     sectionId: string = 'cameras_section'
   ): Promise<void> {
     // Apply saved carousel order if available
-    const sortedCameras = await this.sortCamerasByOrder(camerasEntities, sectionId, context);
+    const sortedCameras = this.sortCamerasByOrder(camerasEntities, sectionId, context);
     
     // Add cameras section title with navigation
     const titleDiv = document.createElement('div');
@@ -40,7 +42,7 @@ export class CamerasSection {
       
       // Add click handler to the wrapper
       clickableWrapper.addEventListener('click', () => {
-        this.navigateToPath('cameras');
+        navigateToDashboardPath('cameras');
       });
       
       titleDiv.appendChild(clickableWrapper);
@@ -219,64 +221,9 @@ export class CamerasSection {
     }
   }
 
-  private navigateToPath(path: string) {
-    const currentPath = window.location.pathname;
-    let basePath = '';
-    
-    // Handle different dashboard URL patterns
-    if (currentPath.startsWith('/lovelace/')) {
-      basePath = '/lovelace/';
-    } else if (currentPath === '/lovelace') {
-      basePath = '/lovelace/';
-    } else {
-      // Custom dashboard: extract the dashboard name
-      const pathParts = currentPath.split('/').filter(part => part.length > 0);
-      if (pathParts.length > 0) {
-        basePath = `/${pathParts[0]}/`;
-      } else {
-        basePath = '/lovelace/';
-      }
-    }
-    
-    // Clean path and construct full URL
-    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-    const newUrl = `${basePath}${cleanPath}`;
-    
-    // Navigate using Home Assistant's system
-    window.history.pushState(null, '', newUrl);
-    const event = new Event('location-changed', { bubbles: true, composed: true });
-    window.dispatchEvent(event);
-  }
-
-  private async sortCamerasByOrder(camerasEntities: Entity[], areaId: string, context: string = 'home'): Promise<Entity[]> {
-    try {
-      // Check if there's a saved manual order for cameras
-      const savedOrder = this.customizationManager.getSavedCarouselOrderWithContext(areaId, 'cameras', context);
-      if (savedOrder && savedOrder.length > 0) {
-        // Apply saved order, similar to how scenes are ordered
-        const entityMap = new Map(camerasEntities.map(entity => [entity.entity_id, entity]));
-        const orderedCameras: Entity[] = [];
-        
-        // First, add cameras in the saved order
-        savedOrder.forEach((entityId: string) => {
-          if (entityMap.has(entityId)) {
-            orderedCameras.push(entityMap.get(entityId)!);
-            entityMap.delete(entityId); // Remove from map to avoid duplicates
-          }
-        });
-        
-        // Then, add any new cameras that weren't in the saved order
-        const remainingCameras = Array.from(entityMap.values());
-        orderedCameras.push(...remainingCameras);
-        
-        return orderedCameras;
-      }
-      
-      // Default behavior: return cameras in original order
-      return camerasEntities;
-    } catch (error) {
-      console.error('Error sorting cameras by order:', error);
-      return camerasEntities;
-    }
+  private sortCamerasByOrder(camerasEntities: Entity[], areaId: string, context: string = 'home'): Entity[] {
+    const savedOrder = this.customizationManager.getSavedCarouselOrderWithContext(areaId, 'cameras', context) || [];
+    const { ordered, remaining } = splitBySavedOrder(camerasEntities, savedOrder);
+    return [...ordered, ...remaining];
   }
 }

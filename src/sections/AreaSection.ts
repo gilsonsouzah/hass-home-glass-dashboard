@@ -5,6 +5,7 @@ import { Entity, CardConfig, Area } from '../types/types';
 import { DashboardConfig } from '../config/DashboardConfig';
 import { RTLHelper } from '../utils/RTLHelper';
 import { escapeHtml } from '../utils/html';
+import { navigateToDashboardPath } from './navigation';
 
 export class AreaSection {
   private customizationManager: CustomizationManager;
@@ -60,7 +61,7 @@ export class AreaSection {
 
       // Add click handler to the wrapper
       clickableWrapper.addEventListener('click', () => {
-        this.navigateToPath(`room-${areaId}`);
+        navigateToDashboardPath(`room-${areaId}`);
       });
 
       titleDiv.appendChild(clickableWrapper);
@@ -243,34 +244,5 @@ export class AreaSection {
     } catch (error) {
       console.error('Error creating card:', error);
     }
-  }
-
-  private navigateToPath(path: string) {
-    const currentPath = window.location.pathname;
-    let basePath = '';
-
-    // Handle different dashboard URL patterns
-    if (currentPath.startsWith('/lovelace/')) {
-      basePath = '/lovelace/';
-    } else if (currentPath === '/lovelace') {
-      basePath = '/lovelace/';
-    } else {
-      // Custom dashboard: extract the dashboard name
-      const pathParts = currentPath.split('/').filter((part) => part.length > 0);
-      if (pathParts.length > 0) {
-        basePath = `/${pathParts[0]}/`;
-      } else {
-        basePath = '/lovelace/';
-      }
-    }
-
-    // Clean path and construct full URL
-    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-    const newUrl = `${basePath}${cleanPath}`;
-
-    // Navigate using Home Assistant's system
-    window.history.pushState(null, '', newUrl);
-    const event = new Event('location-changed', { bubbles: true, composed: true });
-    window.dispatchEvent(event);
   }
 }

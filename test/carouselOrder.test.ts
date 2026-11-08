@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { orderScenes, sortByLastUsed } from '../src/sections/sceneOrder.ts';
+import { orderScenes, sortByLastUsed, splitBySavedOrder } from '../src/sections/carouselOrder.ts';
 
 const ids = (list: { entity_id: string }[]) => list.map((e) => e.entity_id);
 const e = (entity_id: string) => ({ entity_id });
@@ -27,4 +27,9 @@ test('orderScenes: saved order first, new scenes sorted by last used, terminates
 
 test('orderScenes: empty saved order sorts by last used', () => {
   assert.deepEqual(ids(orderScenes([e('scene.a'), e('scene.b')], [], states)), ['scene.b', 'scene.a']);
+});
+
+test('splitBySavedOrder keeps unknown entities in original order', () => {
+  const { ordered, remaining } = splitBySavedOrder([e('x'), e('y'), e('z')], ['z', 'gone']);
+  assert.deepEqual([ids(ordered), ids(remaining)], [['z'], ['x', 'y']]);
 });

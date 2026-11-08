@@ -25,18 +25,22 @@ export function sortByLastUsed<T extends HasId>(entities: T[], states: Record<st
   });
 }
 
-/** Entities listed in `savedOrder` first (in that order), then the rest sorted by last used. */
-export function orderScenes<T extends HasId>(entities: T[], savedOrder: string[], states: Record<string, any>): T[] {
-  if (savedOrder.length === 0) return sortByLastUsed(entities, states);
-
-  const remaining = new Map(entities.map((e) => [e.entity_id, e]));
+/** Splits entities into those named in `savedOrder` (in that order) and the rest (original order). */
+export function splitBySavedOrder<T extends HasId>(entities: T[], savedOrder: string[]): { ordered: T[]; remaining: T[] } {
+  const pending = new Map(entities.map((e) => [e.entity_id, e]));
   const ordered: T[] = [];
   for (const id of savedOrder) {
-    const entity = remaining.get(id);
+    const entity = pending.get(id);
     if (entity) {
       ordered.push(entity);
-      remaining.delete(id);
+      pending.delete(id);
     }
   }
-  return [...ordered, ...sortByLastUsed([...remaining.values()], states)];
+  return { ordered, remaining: [...pending.values()] };
+}
+
+/** Saved order first, then the rest sorted by last used. */
+export function orderScenes<T extends HasId>(entities: T[], savedOrder: string[], states: Record<string, any>): T[] {
+  const { ordered, remaining } = splitBySavedOrder(entities, savedOrder);
+  return [...ordered, ...sortByLastUsed(remaining, states)];
 }
