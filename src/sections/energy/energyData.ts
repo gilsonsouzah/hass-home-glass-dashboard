@@ -1,11 +1,10 @@
 import type { CustomizationManager } from '../../utils/CustomizationManager';
 import {
-  averageSoc, buildBars, gasTotal, getStartDateForPeriod, powerCandidates, previousRange, selfSufficiency, socCandidates, statIds, sumPower, sumStats,
+  averageSoc, buildBars, computeGasCost, computeGridCostTotal, gasTotal, getGridCostEntities, getGridFromEntities,
+  getGridToEntities, getStartDateForPeriod, powerCandidates, previousRange, selfSufficiency, socCandidates, splitSources,
+  statIds, sumPower, sumStats,
   type Period,
 } from '../energyCalc';
-import {
-  computeGasCost, computeGridCostTotal, getGridCostEntities, getGridFromEntities, getGridToEntities, splitSources,
-} from './energySources';
 import type { DeviceConsumption, EnergyData, EnergyPrefs, FullEnergyData } from './types';
 
 const CACHE_TTL = 5 * 60 * 1000;

@@ -1,6 +1,6 @@
 import { CustomizationManager } from '../utils/CustomizationManager';
 import { localize } from '../utils/LocalizationService';
-import { averageSoc, powerCandidates, sumPower, type Period } from './energyCalc';
+import { averageSoc, getGridFromEntities, powerCandidates, sumPower, type Period } from './energyCalc';
 import {
   renderBatteryCard, renderConsumptionChart, renderDeviceBreakdown, renderGasCard, renderGridReturnCard,
   renderSelfSufficiencyCard, renderSolarCard, renderSummaryStats,
@@ -9,7 +9,6 @@ import { renderBarChart } from './energy/energyCharts';
 import { fetchEnergyData, fetchFullEnergyData, getEnergyPrefs } from './energy/energyData';
 import { formatEnergy, formatGas, powerText } from './energy/energyFormat';
 import { getTotalPower, hasEnergySensors } from './energy/energyPower';
-import { getGridFromEntities } from './energy/energySources';
 import { energyHomeStyles } from './energy/energyHomeStyles';
 import { energyPageStyles } from './energy/energyPageStyles';
 import type { EnergyData } from './energy/types';
