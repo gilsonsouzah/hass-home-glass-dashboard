@@ -105,7 +105,10 @@ export class HomeView extends HTMLElement {
     };
     document.addEventListener('hg-dashboard-refresh', this.globalRefreshHandler);
 
-    if (this.content) this.cardRouter.observe(this.content);
+    if (this.content) {
+      this.cardRouter.observe(this.content);
+      void this.updateHeaderForConfig();
+    }
 
     this.setupRegistrySubscriptions();
     this.setupRTLChangeDetection();
