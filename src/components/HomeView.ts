@@ -12,6 +12,9 @@ import { ScenesPage } from '../pages/ScenesPage';
 import { CamerasPage } from '../pages/CamerasPage';
 import { DeviceGroup } from '../config/DashboardConfig';
 import { RegistrySubscriptionManager, RegistryChangeCallback, RegistryChangeEvent } from '../utils/RegistrySubscriptionManager';
+import { syncColorScheme } from '../styles/tokens';
+import { escapeHtml } from '../utils/html';
+import { liquidGlassCSS } from '../utils/LiquidGlassStyles';
 import { VIEW_STYLES } from './view/styles';
 import { CardHassRouter } from './view/CardHassRouter';
 import { ChipsController } from './view/ChipsController';
@@ -23,6 +26,7 @@ import { getActivePage, renderActivePage, ViewPages } from './view/renderActiveP
 import { handleEntityChange, handleAreaChange, applyHomeCustomizationDiff } from './view/domUpdates';
 
 const RENDER_THROTTLE_MS = 500;
+const PERMANENT_CHROME = '.hg-header, .permanent-chips, .apple-page-title, .hg-state-message';
 
 export class HomeView extends HTMLElement {
   private config?: any;
@@ -299,6 +303,7 @@ export class HomeView extends HTMLElement {
     this._hass = hass;
 
     setupLocalize(hass);
+    if (oldHass?.themes?.darkMode !== hass?.themes?.darkMode) syncColorScheme(hass);
 
     this.customizationManager.setHass(hass);
     this.appleHeader.setHass(hass);
@@ -370,7 +375,7 @@ export class HomeView extends HTMLElement {
     if (!wrapperContent) {
       structureCreated = true;
       this.shadowRoot!.innerHTML = `
-        <style>${VIEW_STYLES}</style>
+        <style>${liquidGlassCSS}${VIEW_STYLES}</style>
         <div class="wrapper-content ${RTLHelper.isRTL() ? 'rtl' : 'ltr'}">
           <div class="page-content">
             <div class="hg-header permanent-header"></div>
@@ -494,7 +499,7 @@ export class HomeView extends HTMLElement {
     const savedScrollTop = hasExistingContent && scrollParent ? scrollParent.scrollTop : 0;
 
     if (hasExistingContent) {
-      this.content.style.transition = 'opacity 0.15s ease-out';
+      this.content.style.transition = 'opacity var(--hg-dur-fast) var(--hg-ease-standard)';
       this.content.style.opacity = '0';
       await new Promise(r => setTimeout(r, 150));
     }
@@ -511,9 +516,11 @@ export class HomeView extends HTMLElement {
         this.content,
         (entityId, areaId) => this.toggleTallCard(entityId, areaId)
       );
+      this.showEmptyStateIfBare();
     } catch (error) {
       console.error('Error rendering page:', error);
       this._isTransitioning = false;
+      this.showRenderError(error);
     }
 
     this._rendered = true;
@@ -541,6 +548,30 @@ export class HomeView extends HTMLElement {
       this.callOnCards('resumeCamera');
       this._isTransitioning = false;
     }, 200);
+  }
+
+  private showEmptyStateIfBare(): void {
+    if (!this.content) return;
+    const bare = Array.from(this.content.children).every((child) => child.matches(PERMANENT_CHROME));
+    if (bare) this.appendStateMessage('mdi:home-outline', localize('settings.no_entities_found'));
+  }
+
+  private appendStateMessage(icon: string, title: string, detail = ''): void {
+    this.content!.querySelector('.hg-state-message')?.remove();
+    const box = document.createElement('div');
+    box.className = 'hg-state-message hg-glass';
+    box.innerHTML = `<ha-icon icon="${icon}"></ha-icon><div class="hg-state-title">${escapeHtml(title)}</div>${detail ? `<div class="hg-state-detail">${escapeHtml(detail)}</div>` : ''}`;
+    this.content!.appendChild(box);
+  }
+
+  private showRenderError(error: unknown): void {
+    if (!this.content) return;
+    this.appendStateMessage(
+      'mdi:alert-circle-outline',
+      localize('errors.render_failed', 'This page could not be loaded'),
+      error instanceof Error ? error.message : ''
+    );
+    this.content.querySelector('.hg-state-message')?.setAttribute('role', 'alert');
   }
 
   private async toggleTallCard(entityId: string, areaId: string) {
