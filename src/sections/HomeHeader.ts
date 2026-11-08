@@ -7,10 +7,12 @@ import { HomeChips } from './HomeChips';
 import { localize } from '../utils/LocalizationService';
 import { RTLHelper } from '../utils/RTLHelper';
 import { injectLiquidGlassStyles, LiquidGlassClasses } from '../utils/LiquidGlassStyles';
+import { syncColorScheme } from '../styles/tokens';
+import { applySolidSurfaces } from '../settings/solidSurfaces';
 import { navigateToDashboardPath } from './navigation';
 import { HEADER_STYLE_ID, injectHeaderStyles } from './header/headerStyles';
 import { Area, HeaderConfig, shouldShowSidebarButton } from './header/headerModel';
-import { dropdownContent, headerContent, menuButtonContent, roomsSection } from './header/headerTemplates';
+import { MENU_ID, dropdownContent, headerContent, menuButtonContent, menuButtonLabel, roomsSection } from './header/headerTemplates';
 import {
   getHomeAssistantHeaderHeight,
   observeHaLayout,
@@ -155,6 +157,7 @@ export class HomeHeader {
       config: this.currentConfig,
       showSidebarButton: this.shouldShowSidebarButton(),
       menuButtonHtml: menuButtonContent(this.editMode),
+      menuButtonLabel: menuButtonLabel(this.editMode),
       dropdownHtml: this.currentConfig.showMenu ? this.getDropdownContent() : '',
     });
   }
@@ -196,6 +199,8 @@ export class HomeHeader {
 
     injectLiquidGlassStyles();
     injectHeaderStyles(this.container);
+    this.applySolidSurfacesSetting();
+    this.syncMenuButtonA11y();
     this.updateHAHeaderHeight();
 
     waitForHAInterface().then(() => {
@@ -263,6 +268,14 @@ export class HomeHeader {
       }
     });
 
+    this.menuButton.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown' && !this.editMode && !this.isDropdownOpen) {
+        e.preventDefault();
+        this.toggleDropdown();
+      }
+    });
+    this.dropdown.addEventListener('keydown', (e: KeyboardEvent) => this.handleMenuKeydown(e));
+
     this.setupDropdownItemListeners();
 
     this.removeDocumentListeners();
@@ -275,8 +288,8 @@ export class HomeHeader {
     document.addEventListener('click', this.clickOutsideListener);
 
     this.escapeKeyListener = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        this.closeDropdown();
+      if (e.key === 'Escape' && this.isDropdownOpen) {
+        this.closeDropdown(true);
       }
     };
     document.addEventListener('keydown', this.escapeKeyListener);
@@ -288,8 +301,8 @@ export class HomeHeader {
     const onItem = (selector: string, action: () => void) => {
       this.dropdown!.querySelector(selector)?.addEventListener('click', (e: Event) => {
         e.stopPropagation();
+        this.closeDropdown(true);
         action();
-        this.closeDropdown();
       });
     };
 
@@ -306,7 +319,7 @@ export class HomeHeader {
         if (roomId) {
           navigateToDashboardPath(`room-${roomId}`);
         }
-        this.closeDropdown();
+        this.closeDropdown(true);
       });
     });
   }
@@ -363,15 +376,68 @@ export class HomeHeader {
   private toggleDropdown() {
     if (!this.dropdown) return;
 
-    this.isDropdownOpen = !this.isDropdownOpen;
-
     if (this.isDropdownOpen) {
-      this.dropdown.innerHTML = this.getDropdownContent();
-      this.setupDropdownItemListeners();
-      this.positionDropdown();
+      this.closeDropdown(true);
+      return;
     }
 
-    this.dropdown.classList.toggle('open', this.isDropdownOpen);
+    this.isDropdownOpen = true;
+    this.dropdown.innerHTML = this.getDropdownContent();
+    this.setupDropdownItemListeners();
+    this.positionDropdown();
+    this.dropdown.classList.add('open');
+    this.menuButton?.setAttribute('aria-expanded', 'true');
+    this.menuItems()[0]?.focus({ preventScroll: true });
+  }
+
+  private menuItems(): HTMLElement[] {
+    return Array.from(this.dropdown?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+  }
+
+  private handleMenuKeydown(e: KeyboardEvent) {
+    const items = this.menuItems();
+    if (items.length === 0) return;
+    const index = items.indexOf(e.target as HTMLElement);
+    const focusAt = (i: number) => {
+      e.preventDefault();
+      items[(i + items.length) % items.length].focus();
+    };
+
+    switch (e.key) {
+      case 'ArrowDown':
+        return focusAt(index + 1);
+      case 'ArrowUp':
+        return focusAt(index <= 0 ? -1 : index - 1);
+      case 'Home':
+        return focusAt(0);
+      case 'End':
+        return focusAt(-1);
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        if (index !== -1) items[index].click();
+        return;
+      case 'Tab':
+        this.closeDropdown(false);
+    }
+  }
+
+  private syncMenuButtonA11y() {
+    if (!this.menuButton) return;
+    this.menuButton.setAttribute('aria-label', menuButtonLabel(this.editMode));
+    if (this.editMode) {
+      this.menuButton.removeAttribute('aria-haspopup');
+      this.menuButton.removeAttribute('aria-expanded');
+      this.menuButton.removeAttribute('aria-controls');
+    } else {
+      this.menuButton.setAttribute('aria-haspopup', 'menu');
+      this.menuButton.setAttribute('aria-expanded', String(this.isDropdownOpen));
+      this.menuButton.setAttribute('aria-controls', MENU_ID);
+    }
+  }
+
+  private applySolidSurfacesSetting() {
+    applySolidSurfaces(this.customizationManager?.getUISettings().solid_surfaces === true);
   }
 
   private positionDropdown() {
@@ -392,11 +458,14 @@ export class HomeHeader {
     this.dropdown.style.left = RTLHelper.isRTL() ? '10px' : 'auto';
   }
 
-  private closeDropdown() {
+  private closeDropdown(returnFocus = false) {
     if (!this.dropdown) return;
 
+    const hadFocus = this.dropdown.contains(document.activeElement);
     this.isDropdownOpen = false;
     this.dropdown.classList.remove('open');
+    this.menuButton?.setAttribute('aria-expanded', 'false');
+    if (returnFocus || hadFocus) this.menuButton?.focus({ preventScroll: true });
   }
 
   private toggleEditMode() {
@@ -409,6 +478,7 @@ export class HomeHeader {
     if (this.menuButton) {
       this.menuButton.innerHTML = menuButtonContent(this.editMode);
       this.menuButton.classList.toggle('edit-mode', this.editMode);
+      this.syncMenuButtonA11y();
     }
 
     this.dropdown?.querySelector('.edit-item')?.classList.toggle('active', this.editMode);
@@ -583,6 +653,7 @@ export class HomeHeader {
 
   private processSetHass(hass: any) {
     RTLHelper.initialize(hass);
+    syncColorScheme(hass);
 
     // Special pages (room, scenes, cameras) keep their own titles.
     if (!this.currentConfig.isGroupPage && !this.currentConfig.isSpecialPage && hass?.config?.location_name) {
