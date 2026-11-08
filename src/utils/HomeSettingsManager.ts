@@ -1787,19 +1787,13 @@ export class HomeSettingsManager {
       customBackground: this.tempSettings.customBackground
     };
 
-    // Cancel button (X)
-    const cancelBtn = presetsModal.querySelector('.modal-cancel');
-    cancelBtn?.addEventListener('click', () => {
-      // Revert temp settings to original state
-      this.tempSettings.backgroundType = originalSettings.backgroundType;
-      this.tempSettings.presetBackground = originalSettings.presetBackground;
-      this.tempSettings.customBackground = originalSettings.customBackground;
-      
-      // Update the main modal preview to show reverted state
+    const revert = () => {
+      Object.assign(this.tempSettings, originalSettings);
       this.updateCurrentWallpaperPreview();
-      
       this.closePresetsModal(presetsModal);
-    });
+    };
+
+    presetsModal.querySelector('.modal-cancel')?.addEventListener('click', revert);
 
     // Done button (checkmark) - save and close
     const doneBtn = presetsModal.querySelector('.modal-done');
@@ -1809,19 +1803,7 @@ export class HomeSettingsManager {
       this.closePresetsModal(presetsModal);
     });
 
-    // Backdrop click (treat as cancel)
-    const backdrop = presetsModal.querySelector('.modal-backdrop');
-    backdrop?.addEventListener('click', () => {
-      // Revert temp settings to original state
-      this.tempSettings.backgroundType = originalSettings.backgroundType;
-      this.tempSettings.presetBackground = originalSettings.presetBackground;
-      this.tempSettings.customBackground = originalSettings.customBackground;
-      
-      // Update the main modal preview to show reverted state
-      this.updateCurrentWallpaperPreview();
-      
-      this.closePresetsModal(presetsModal);
-    });
+    presetsModal.querySelector('.modal-backdrop')?.addEventListener('click', revert);
 
     // Preset selection - select but don't close (user clicks checkmark to confirm)
     const presetOptions = presetsModal.querySelectorAll('.preset-option');
