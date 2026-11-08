@@ -3,7 +3,6 @@ import { isGarageDoorOrGate, isOutlet } from './deviceGroup';
 function getMediaPlayerIcon(entityState: string, attributes: any): string {
   const deviceClass = attributes.device_class;
 
-  // Use device class for specific icons (no state-based changes)
   switch (deviceClass) {
     case 'tv':
       return 'mdi:television';
@@ -14,7 +13,6 @@ function getMediaPlayerIcon(entityState: string, attributes: any): string {
     case 'music':
       return 'mdi:music';
     default:
-      // Fallback to generic cast icon
       return 'mdi:cast';
   }
 }
@@ -24,14 +22,11 @@ export function getFallbackIcon(domain: string, entityState: string, attributes:
     case 'light':
       return 'mdi:lightbulb';
     case 'switch':
-      // Special handling for outlets
       if (entityId && isOutlet(entityId, attributes)) {
         return 'mdi:power-socket';
       }
-      // Fallback for other switches (though they should be hidden)
       return 'mdi:light-switch';
     case 'cover':
-      // Special handling for garage doors and gates
       if (entityId && isGarageDoorOrGate(entityId, attributes)) {
         switch (entityState) {
           case 'opening':
@@ -45,7 +40,6 @@ export function getFallbackIcon(domain: string, entityState: string, attributes:
             return 'mdi:garage';
         }
       }
-      // Regular covers (blinds, shutters, etc.)
       if (entityState === 'opening' || entityState === 'closing') {
         return 'mdi:window-shutter-cog';
       }

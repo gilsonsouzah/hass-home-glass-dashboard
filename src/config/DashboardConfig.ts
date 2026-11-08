@@ -87,7 +87,6 @@ export class DashboardConfig {
   private static applyGroupStyling(group: DeviceGroup): Partial<EntityData> {
     const groupStyle = this.getGroupStyle(group);
 
-    // Use activeIconColor if defined, otherwise default to white
     const iconColor = groupStyle.activeIconColor || '#ffffff';
 
     return {
@@ -115,14 +114,12 @@ export class DashboardConfig {
       (isActive ? CLIMATE_MODE_COLORS.heat : CLIMATE_MODE_COLORS.off);
 
     if (isActive) {
-      // Active climate: white icon, colored background (but transparent for climate)
       return {
         ...ACTIVE_BASE_STYLE,
         iconBackgroundColor: 'transparent',
         iconColor: climateColor,
       };
     } else {
-      // Inactive climate: colored icon, gray background
       return {
         ...INACTIVE_STYLE,
         iconColor: climateColor,
@@ -136,14 +133,12 @@ export class DashboardConfig {
       (isActive ? WATER_HEATER_MODE_COLORS.electric : WATER_HEATER_MODE_COLORS.off);
 
     if (isActive) {
-      // Active water heater: white icon, colored background (but transparent for temperature display)
       return {
         ...ACTIVE_BASE_STYLE,
         iconBackgroundColor: 'transparent',
         iconColor: waterHeaterColor,
       };
     } else {
-      // Inactive water heater: colored icon, gray background
       return {
         ...INACTIVE_STYLE,
         iconColor: waterHeaterColor,
@@ -161,10 +156,8 @@ export class DashboardConfig {
     const entityState = state.state;
     const attributes = state.attributes;
 
-    // Handle unavailable, unknown, or other problematic states
     const isUnavailableState = ['unavailable', 'unknown', 'none', 'null', ''].includes(entityState.toLowerCase());
 
-    // If unavailable, apply off styling and translate the status text
     if (isUnavailableState) {
       return {
         isActive: false,
@@ -177,34 +170,27 @@ export class DashboardConfig {
       };
     }
 
-    // Handle status domains (includes both supported and status-section domains)
     if (!this.isStatusDomain(domain)) {
       return this.handleUnsupportedDomain(entityState, attributes, domain, state.entity_id);
     }
 
-    // Get device group and determine if active
     const deviceGroup = this.getDeviceGroup(domain, state.entity_id, attributes);
     const isActive = this.isEntityActive(domain, entityState);
 
     const icon = attributes.icon || getFallbackIcon(domain, entityState, attributes, state.entity_id);
     const stateText = getStateText(domain, entityState, attributes, hass);
 
-    // Apply styling based on domain and state
     let styling: Partial<EntityData>;
     if (domain === 'climate') {
       styling = this.applyClimateStyling(entityState, isActive);
     } else if (domain === 'water_heater') {
-      // Water heater domain uses special mode-based colors similar to climate
       styling = this.applyWaterHeaterStyling(entityState, isActive);
     } else if (isActive && deviceGroup) {
-      // Use group-based styling for active devices
       styling = this.applyGroupStyling(deviceGroup);
     } else {
-      // Use inactive styling with group color for icon
       styling = this.applyInactiveStyling(deviceGroup);
     }
 
-    // Override icon color if forceWhiteIcons is true
     if (forceWhiteIcons) {
       styling = {
         ...styling,
@@ -254,11 +240,9 @@ export class DashboardConfig {
         result = entityState === 'on';
         break;
       case 'sensor':
-        // Sensors are always considered active for status display
         result = true;
         break;
       case 'vacuum':
-        // Vacuum is active when cleaning, returning, or any state other than docked/idle/off
         result = ['cleaning', 'returning', 'paused'].includes(entityState);
         break;
       default:

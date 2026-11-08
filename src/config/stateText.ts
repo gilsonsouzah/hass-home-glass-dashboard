@@ -88,7 +88,6 @@ function getClimateStateText(entityState: string, attributes: any, hass?: any): 
   // Get temperature unit from entity attributes, or from Home Assistant config, or fallback to °C
   const tempUnit = attributes.unit_of_measurement || hass?.config?.unit_system?.temperature || '°C';
 
-  // When active, show current temperature
   if (entityState !== 'off' && currentTemp !== undefined && currentTemp !== null) {
     return `${localize('status.current')}: ${currentTemp}${tempUnit}`;
   }
@@ -224,12 +223,10 @@ function getSensorStateText(entityState: string, attributes: any): string {
   const deviceClass = attributes.device_class;
   const unitOfMeasurement = attributes.unit_of_measurement;
 
-  // If it has a unit of measurement, show the value with unit
   if (unitOfMeasurement && entityState !== 'unavailable' && entityState !== 'unknown') {
     return `${entityState} ${unitOfMeasurement}`;
   }
 
-  // Handle special device classes
   switch (deviceClass) {
     case 'battery':
       return entityState !== 'unavailable' && entityState !== 'unknown' ? `${entityState}%` : entityState;
@@ -238,7 +235,6 @@ function getSensorStateText(entityState: string, attributes: any): string {
     case 'temperature':
       return entityState !== 'unavailable' && entityState !== 'unknown' ? `${entityState}°` : entityState;
     case 'timestamp':
-      // Return the raw timestamp for now
       return entityState;
     default:
       return entityState;
