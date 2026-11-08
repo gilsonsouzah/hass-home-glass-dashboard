@@ -17,7 +17,7 @@ export const VIEW_STYLES = `
 
 :host {
   display: block;
-  padding: 0 var(--apple-page-padding, 22px) var(--apple-page-padding-bottom, 22px) var(--apple-page-padding, 22px);
+  padding: 0 var(--hg-page-padding) var(--hg-page-padding-bottom) var(--hg-page-padding);
   box-sizing: border-box;
   width: 100%;
   background: transparent;
@@ -26,16 +26,17 @@ export const VIEW_STYLES = `
   container-type: inline-size;
   container-name: home-glass-view;
   /* Local variables - only for values that need container-specific overrides */
-  --card-gap: var(--apple-card-gap, 10px);
-  --section-margin: var(--apple-section-gap, 20px);
+  --card-gap: var(--hg-card-gap, 10px);
+  --section-margin: var(--hg-section-gap, 20px);
+  font-family: var(--hg-font);
+  color: var(--hg-label);
 }
 
-/* Reduce motion for accessibility */
 @media (prefers-reduced-motion: reduce) {
   :host * {
-    animation-duration: 0.01ms !important;
+    animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 1ms !important;
   }
 }
 
@@ -52,15 +53,43 @@ export const VIEW_STYLES = `
 
 /* Page title (big title below header) */
 .apple-page-title {
-  font-size: var(--apple-title-size, 28px);
-  font-weight: 700;
-  color: #ffffff;
+  font-size: var(--hg-text-large-title-size);
+  line-height: var(--hg-text-large-title-line);
+  font-weight: var(--hg-text-large-title-weight);
+  color: var(--hg-title-color, #fff);
+  text-shadow: var(--hg-title-shadow, 0 1px 3px rgba(0, 0, 0, 0.35));
   margin: 10px 0 15px 0;
-  letter-spacing: -0.5px;
-  line-height: 1.2;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.4px;
   display: block;
   visibility: visible;
+}
+
+.hg-state-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 40px auto;
+  max-width: 360px;
+  padding: 24px 20px;
+  border-radius: var(--hg-radius-tile);
+  text-align: center;
+  color: var(--hg-label);
+}
+.hg-state-message ha-icon {
+  --mdc-icon-size: 40px;
+  color: var(--hg-label-secondary);
+}
+.hg-state-title {
+  font-size: var(--hg-text-headline-size);
+  line-height: var(--hg-text-headline-line);
+  font-weight: 600;
+}
+.hg-state-detail {
+  font-size: var(--hg-text-footnote-size);
+  line-height: var(--hg-text-footnote-line);
+  color: var(--hg-label-secondary);
+  overflow-wrap: anywhere;
 }
 
 .area-section {
@@ -68,11 +97,12 @@ export const VIEW_STYLES = `
 }
 .area-title {
   font-weight: 600;
-  font-size: var(--apple-section-title-size, 17px);
-  color: #fff;
+  font-size: var(--hg-text-title3-size);
+  line-height: var(--hg-text-title3-line);
+  color: var(--hg-title-color, #fff);
+  text-shadow: var(--hg-title-shadow, 0 1px 3px rgba(0, 0, 0, 0.35));
   margin: 20px 0 6px;
   padding: 0;
-  letter-spacing: 0.2px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -80,12 +110,13 @@ export const VIEW_STYLES = `
 
 /* Special section titles (Scenes, Cameras) */
 .hg-section-title {
-  font-size: var(--apple-section-title-size, 17px);
+  font-size: var(--hg-text-title3-size);
+  line-height: var(--hg-text-title3-line);
   font-weight: 600;
-  color: #fff;
+  color: var(--hg-title-color, #fff);
+  text-shadow: var(--hg-title-shadow, 0 1px 3px rgba(0, 0, 0, 0.35));
   margin: 20px 0 6px;
   padding: 0;
-  letter-spacing: 0.2px;
 }
 
 /* Clickable section titles with arrows */
@@ -94,7 +125,7 @@ export const VIEW_STYLES = `
   align-items: center;
   justify-content: flex-start;
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--hg-dur) var(--hg-ease-standard);
   user-select: none;
   font-size: inherit;
   font-weight: inherit;
@@ -102,9 +133,9 @@ export const VIEW_STYLES = `
 }
 
 .clickable-section-title .section-arrow {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--hg-label-secondary);
   --mdc-icon-size: 22px;
-  transition: color 0.2s ease;
+  transition: color var(--hg-dur) var(--hg-ease-standard);
 }
 
 /* Special section titles (Scenes, Cameras) */
@@ -120,8 +151,8 @@ export const VIEW_STYLES = `
   overflow-y: hidden;
   margin-bottom: var(--section-margin);
   contain: layout style;
-  margin-inline-start: calc(-1 * var(--apple-page-padding, 22px));
-  margin-inline-end: calc(-1 * var(--apple-page-padding, 22px));
+  margin-inline-start: calc(-1 * var(--hg-page-padding));
+  margin-inline-end: calc(-1 * var(--hg-page-padding));
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
@@ -135,8 +166,8 @@ export const VIEW_STYLES = `
 .carousel-grid {
   display: inline-flex;
   gap: var(--card-gap);
-  padding-inline-start: var(--apple-page-padding, 22px);
-  padding-inline-end: var(--apple-page-padding, 22px);
+  padding-inline-start: var(--hg-page-padding);
+  padding-inline-end: var(--hg-page-padding);
   min-width: 100%;
   box-sizing: border-box;
 }
@@ -164,8 +195,8 @@ export const VIEW_STYLES = `
 .carousel-grid.cameras::after {
   content: '';
   flex-shrink: 0;
-  width: var(--apple-page-padding, 22px);
-  min-width: var(--apple-page-padding, 22px);
+  width: var(--hg-page-padding);
+  min-width: var(--hg-page-padding);
 }
 
 .carousel-grid .entity-card-wrapper {
@@ -331,12 +362,13 @@ home-glass-card {
 
 /* Room group section titles */
 .room-group-title {
-  font-size: var(--apple-section-title-size, 17px);
+  font-size: var(--hg-text-title3-size);
+  line-height: var(--hg-text-title3-line);
   font-weight: 600;
-  color: #fff;
+  color: var(--hg-title-color, #fff);
+  text-shadow: var(--hg-title-shadow, 0 1px 3px rgba(0, 0, 0, 0.35));
   margin: 30px 0 16px;
   padding: 0;
-  letter-spacing: 0.3px;
 }
 
 /* Group section spacing */
@@ -703,8 +735,8 @@ home-glass-card {
   }
   
   .apple-page-title {
-    font-size: var(--apple-title-size, 28px);
-    margin-bottom: 10px;
+    font-size: var(--hg-text-title1-size);
+    line-height: var(--hg-text-title1-line);
     margin-bottom: 20px;
   }
   
@@ -766,13 +798,15 @@ home-glass-card {
   }
   
   .apple-page-title {
-    font-size: 22px;
+    font-size: var(--hg-text-title2-size);
+    line-height: var(--hg-text-title2-line);
   }
   
   .area-title,
   .hg-section-title,
   .room-group-title {
-    font-size: 16px;
+    font-size: var(--hg-text-headline-size);
+    line-height: var(--hg-text-headline-line);
     margin-top: 16px;
   }
   
@@ -814,13 +848,15 @@ home-glass-card {
   }
   
   .apple-page-title {
-    font-size: 20px;
+    font-size: var(--hg-text-title2-size);
+    line-height: var(--hg-text-title2-line);
   }
   
   .area-title,
   .hg-section-title,
   .room-group-title {
-    font-size: 15px;
+    font-size: var(--hg-text-headline-size);
+    line-height: var(--hg-text-headline-line);
     margin-top: 14px;
   }
   
@@ -857,19 +893,21 @@ home-glass-card {
    ============================================ */
 @media (max-width: 359px) {
   :host {
-    padding: 0 var(--apple-page-padding, 10px) var(--apple-page-padding-bottom, 10px) var(--apple-page-padding, 10px);
+    padding: 0 var(--hg-page-padding) var(--hg-page-padding-bottom) var(--hg-page-padding);
     --card-gap: 8px;
     --section-margin: 14px;
   }
   
   .apple-page-title {
-    font-size: 20px;
+    font-size: var(--hg-text-title2-size);
+    line-height: var(--hg-text-title2-line);
   }
   
   .area-title,
   .hg-section-title,
   .room-group-title {
-    font-size: 15px;
+    font-size: var(--hg-text-headline-size);
+    line-height: var(--hg-text-headline-line);
     margin-top: 14px;
   }
   
@@ -917,17 +955,19 @@ home-glass-card {
 /* Very narrow viewport (accessibility zoom or split screen) */
 @media (max-width: 320px) {
   :host {
-    padding: 0 var(--apple-page-padding, 8px) var(--apple-page-padding-bottom, 8px) var(--apple-page-padding, 8px);
+    padding: 0 var(--hg-page-padding) var(--hg-page-padding-bottom) var(--hg-page-padding);
   }
   
   .apple-page-title {
-    font-size: 20px;
+    font-size: var(--hg-text-title2-size);
+    line-height: var(--hg-text-title2-line);
   }
   
   .area-title,
   .hg-section-title,
   .room-group-title {
-    font-size: 16px;
+    font-size: var(--hg-text-headline-size);
+    line-height: var(--hg-text-headline-line);
   }
   
   /* Even smaller cards for very narrow screens */
