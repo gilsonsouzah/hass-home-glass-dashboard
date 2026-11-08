@@ -10,8 +10,9 @@ export interface BackgroundConfig {
 export class BackgroundManager {
   private customizationManager: CustomizationManager;
   private currentBackground: BackgroundConfig;
-  private dashboardRefreshHandler?: (event: Event) => void;
-  private static activeInstances = new Set<BackgroundManager>();
+  // Most recently created/used instance; the shared listeners below act on it.
+  private static current: BackgroundManager | null = null;
+  private static listenersRegistered = false;
 
   // Predefined gradient backgrounds
   static readonly PRESET_BACKGROUNDS = {
@@ -57,103 +58,54 @@ export class BackgroundManager {
   // Default background is the first preset
   static readonly DEFAULT_BACKGROUND = 'default';
   
-  // Track our listener so we can clean it up
-  private dashboardStateListener?: (isActive: boolean, dashboardKey?: string | null) => void;
-
   constructor(customizationManager: CustomizationManager) {
     this.customizationManager = customizationManager;
     this.currentBackground = this.getBackgroundConfig();
-    
-    // Only start monitoring if this is the first instance
-    if (BackgroundManager.activeInstances.size === 0) {
-      this.dashboardStateListener = (isActive: boolean, dashboardKey?: string | null) => {
-        this.handleDashboardStateChange(isActive);
-      };
-      DashboardStateManager.getInstance().addListener(this.dashboardStateListener);
-    }
-    
-    // Listen for dashboard refresh events to update background configuration
-    this.setupDashboardRefreshListener();
-    
-    BackgroundManager.activeInstances.add(this);
+    BackgroundManager.current = this;
+    BackgroundManager.registerListeners();
   }
 
-  /**
-   * Setup listener for dashboard refresh events to update background configuration
-   */
-  private setupDashboardRefreshListener(): void {
-    this.dashboardRefreshHandler = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      
-      // Refresh background configuration from updated customizations
-      const newBackgroundConfig = this.getBackgroundConfig();
-      
-      // Only update and reapply if the background configuration actually changed
-      if (JSON.stringify(newBackgroundConfig) !== JSON.stringify(this.currentBackground)) {
-        this.currentBackground = newBackgroundConfig;
-        
-        // Reapply background if dashboard is currently active
-        if (DashboardStateManager.getInstance().isDashboardActive()) {
-          this.applyBackgroundToBody(this.currentBackground);
-        }
+  // Registered once for the page lifetime: instances are created on every strategy
+  // run and settings modal open, so per-instance listeners would pile up.
+  private static registerListeners(): void {
+    if (BackgroundManager.listenersRegistered) return;
+    BackgroundManager.listenersRegistered = true;
+
+    DashboardStateManager.getInstance().addListener((isActive) => {
+      const manager = BackgroundManager.current;
+      if (!manager) return;
+      if (isActive) {
+        manager.applyBackgroundToBody(manager.currentBackground);
+      } else {
+        BackgroundManager.removeStyle();
       }
-    };
-    
-    document.addEventListener('hg-dashboard-refresh', this.dashboardRefreshHandler);
+    });
+
+    document.addEventListener('hg-dashboard-refresh', () => {
+      const manager = BackgroundManager.current;
+      if (!manager) return;
+      const config = manager.getBackgroundConfig();
+      if (JSON.stringify(config) === JSON.stringify(manager.currentBackground)) return;
+      manager.currentBackground = config;
+      manager.applyBackgroundToBody(config);
+    });
   }
 
-  /**
-   * Handle dashboard state changes
-   */
-  private handleDashboardStateChange(isActive: boolean): void {
-    if (isActive) {
-      // Dashboard activated: apply custom background
-      this.applyBackgroundToBody(this.currentBackground);
-    } else {
-      // Dashboard deactivated: remove any custom background
-      this.removeBackground();
-    }
+  private static removeStyle(): void {
+    document.querySelector('#hg-body-background')?.remove();
   }
 
-  /**
-   * Clear any custom background styles from the document
-   */
-  static clearBackgrounds(): void {
-    const styleEl = document.querySelector('#hg-body-background');
-    if (styleEl) {
-      styleEl.remove();
-    }
-  }
-
-  /**
-   * Get current background configuration from storage
-   */
   private getBackgroundConfig(): BackgroundConfig {
-    const customizations = this.customizationManager.getCustomizations();
-    const backgroundData = customizations.background;
-    
+    const backgroundData = this.customizationManager.getCustomizations().background;
+
     if (backgroundData) {
       return {
         type: backgroundData.type || 'preset',
         backgroundImage: backgroundData.value || backgroundData.backgroundImage || BackgroundManager.DEFAULT_BACKGROUND
       };
     }
-    
-    return { type: 'preset', backgroundImage: BackgroundManager.DEFAULT_BACKGROUND };
-  }
 
-  /**
-   * Set background configuration and apply to body
-   */
-  async setBackground(config: BackgroundConfig): Promise<void> {
-    this.currentBackground = config;
-    // Convert internal backgroundImage property to storage value property
-    const storageConfig = {
-      type: config.type,
-      value: config.backgroundImage
-    };
-    await this.customizationManager.setCustomization('background', storageConfig);
-    this.applyBackgroundToBody(config);
+    return { type: 'preset', backgroundImage: BackgroundManager.DEFAULT_BACKGROUND };
   }
 
   /**
@@ -161,6 +113,7 @@ export class BackgroundManager {
    * Use this when the background config has already been saved elsewhere.
    */
   applyBackgroundOnly(config: BackgroundConfig): void {
+    BackgroundManager.current = this;
     this.currentBackground = config;
     this.applyBackgroundToBody(config);
   }
@@ -189,11 +142,7 @@ export class BackgroundManager {
       backgroundStyle = BackgroundManager.getDefaultBackground();
     }
     
-    // Remove any existing background style first
-    const existingStyle = document.querySelector('#hg-body-background');
-    if (existingStyle) {
-      existingStyle.remove();
-    }
+    BackgroundManager.removeStyle();
     
     // Create new style element for body background
     // Uses body::after pseudo-element for iOS Safari compatibility
@@ -235,53 +184,11 @@ export class BackgroundManager {
     this.applyBackgroundToBody(config);
   }
 
-
-  /**
-   * Set custom background from base64 image (formatted as data URL)
-   */
-  async setCustomBackground(dataUrl: string): Promise<void> {
-    const config: BackgroundConfig = {
-      type: 'custom',
-      backgroundImage: dataUrl
-    };
-    await this.setBackground(config);
-  }
-
-  /**
-   * Set preset background
-   */
-  async setPresetBackground(presetName: string): Promise<void> {
-    const config: BackgroundConfig = {
-      type: 'preset',
-      backgroundImage: presetName
-    };
-    await this.setBackground(config);
-  }
-
-  /**
-   * Reset to default background
-   */
-  async resetToDefault(): Promise<void> {
-    const config: BackgroundConfig = {
-      type: 'preset',
-      backgroundImage: BackgroundManager.DEFAULT_BACKGROUND
-    };
-    await this.setBackground(config);
-  }
-
   /**
    * Get current background config
    */
   getCurrentBackground(): BackgroundConfig {
     return { ...this.currentBackground };
-  }
-
-
-  /**
-   * Check if using custom background
-   */
-  isUsingCustomBackground(): boolean {
-    return this.currentBackground.type === 'custom' && !!this.currentBackground.backgroundImage;
   }
 
   /**
@@ -319,40 +226,4 @@ export class BackgroundManager {
       reader.readAsDataURL(file);
     });
   }
-
-  /**
-   * Remove background from document body
-   */
-  private removeBackground(): void {
-    const existingStyle = document.querySelector('#hg-body-background');
-    if (existingStyle) {
-      existingStyle.remove();
-    }
-  }
-
-  /**
-   * Cleanup method - call when dashboard is destroyed
-   */
-  cleanup(): void {
-    // Remove dashboard state listener
-    if (this.dashboardStateListener) {
-      DashboardStateManager.getInstance().removeListener(this.dashboardStateListener);
-      this.dashboardStateListener = undefined;
-    }
-    
-    // Remove dashboard refresh event listener
-    if (this.dashboardRefreshHandler) {
-      document.removeEventListener('hg-dashboard-refresh', this.dashboardRefreshHandler);
-      this.dashboardRefreshHandler = undefined;
-    }
-    
-    BackgroundManager.activeInstances.delete(this);
-    
-    // Only remove background if this was the last instance
-    if (BackgroundManager.activeInstances.size === 0) {
-      this.removeBackground();
-      this.customizationManager.setDashboardActive(false);
-    }
-  }
-
 }
