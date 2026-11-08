@@ -4,6 +4,7 @@ import { localize } from '../utils/LocalizationService';
 import { RTLHelper } from '../utils/RTLHelper';
 import { escapeHtml } from '../utils/html';
 import { EnergySection } from './EnergySection';
+import { getCachedGridEntityIds, getEnergyPrefs } from './energy/energyData';
 import { countLightsOn, formatPower, isWaterEntity, summarizeSecurity } from './chipStatus';
 import { navigateToDashboardPath } from './navigation';
 
@@ -316,6 +317,17 @@ export class HomeChips {
     }
   }
 
+  private energyPrefsRequested = false;
+
+  // Fills the grid-sensor cache getTotalPower reads; one request per instance, re-render when it lands.
+  private loadEnergyPrefsOnce() {
+    if (this.energyPrefsRequested || getCachedGridEntityIds()) return;
+    this.energyPrefsRequested = true;
+    void getEnergyPrefs(this._hass).then(() => {
+      if (getCachedGridEntityIds()) this.render();
+    });
+  }
+
   private updateChipData() {
     if (!this._hass || !this.config) return;
 
@@ -361,6 +373,7 @@ export class HomeChips {
       let shouldShow = groupEntities.length > 0;
       if (group === DeviceGroup.ENERGY) {
         shouldShow = EnergySection.hasEnergySensors(this._hass);
+        if (shouldShow) this.loadEnergyPrefsOnce();
       }
 
       if (shouldShow) {
