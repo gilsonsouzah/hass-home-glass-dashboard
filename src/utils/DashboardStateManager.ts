@@ -49,18 +49,6 @@ export class DashboardStateManager {
   }
 
   /**
-   * Unregister a dashboard key (useful for cleanup)
-   */
-  unregisterDashboard(dashboardKey: string): void {
-    this.registeredDashboardKeys.delete(dashboardKey);
-    
-    // If this was the active dashboard, deactivate
-    if (this.currentDashboardKey === dashboardKey) {
-      this.setDashboardInactive();
-    }
-  }
-
-  /**
    * Register a listener for dashboard state changes
    * Listener receives: (isActive, dashboardKey)
    */
@@ -80,20 +68,6 @@ export class DashboardStateManager {
    */
   isDashboardActive(): boolean {
     return this.isActive;
-  }
-
-  /**
-   * Get current active dashboard key
-   */
-  getCurrentDashboardKey(): string | null {
-    return this.currentDashboardKey;
-  }
-
-  /**
-   * Get all registered dashboard keys
-   */
-  getRegisteredDashboardKeys(): string[] {
-    return Array.from(this.registeredDashboardKeys);
   }
 
   /**
@@ -205,8 +179,8 @@ export class DashboardStateManager {
     });
 
     // Intercept history methods only once globally
-    if (!(window as any).__appleHomeDashboardHistoryIntercepted) {
-      (window as any).__appleHomeDashboardHistoryIntercepted = true;
+    if (!(window as any).__homeGlassHistoryIntercepted) {
+      (window as any).__homeGlassHistoryIntercepted = true;
       
       const originalPushState = history.pushState;
       const originalReplaceState = history.replaceState;
@@ -262,13 +236,6 @@ export class DashboardStateManager {
   }
 
   /**
-   * Force a state check - useful after strategy initialization
-   */
-  checkCurrentState(): void {
-    this.handleNavigationChange();
-  }
-
-  /**
    * Notify all listeners of state change
    */
   private notifyListeners(isActive: boolean, dashboardKey: string | null): void {
@@ -279,16 +246,5 @@ export class DashboardStateManager {
         console.error('Apple Home Dashboard: Error in state listener:', error);
       }
     });
-  }
-
-  /**
-   * Clean up resources
-   */
-  destroy(): void {
-    this.listeners.clear();
-    this.registeredDashboardKeys.clear();
-    this.currentDashboardKey = null;
-    this.isActive = false;
-    DashboardStateManager.instance = null;
   }
 }
