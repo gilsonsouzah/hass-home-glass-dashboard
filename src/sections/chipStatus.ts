@@ -6,7 +6,7 @@ interface ChipEntity {
 const WATER_KEYWORDS = ['water', 'leak', 'flood'];
 
 /** Moisture sensors; id keywords apply only to binary_sensors that declare no device_class. */
-export function isWaterEntity(entityId: string, attributes?: { device_class?: string }): boolean {
+export function isWaterEntity(entityId: string, attributes?: Record<string, any>): boolean {
   const deviceClass = attributes?.device_class;
   if (deviceClass === 'moisture') return true;
   return !deviceClass && entityId.startsWith('binary_sensor.') && WATER_KEYWORDS.some((kw) => entityId.includes(kw));
