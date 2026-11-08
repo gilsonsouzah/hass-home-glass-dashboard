@@ -1,6 +1,7 @@
 import { CustomizationManager } from './CustomizationManager';
 import { DashboardStateManager } from './DashboardStateManager';
 import { localize } from './LocalizationService';
+import { dockToRestore } from './sidebarDock';
 
 export interface HomeAssistantUIState {
   headerVisible: boolean;
@@ -140,7 +141,7 @@ export class HomeAssistantUIManager {
       }
 
       if (hide) {
-        this.originalDock ??= ha.hass?.dockedSidebar ?? "docked";
+        this.originalDock ??= dockToRestore(ha.hass?.dockedSidebar);
         this.fire(main, "hass-dock-sidebar", { dock: "always_hidden" });
       } else {
         const dock = this.originalDock!;
