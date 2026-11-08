@@ -2,6 +2,7 @@ import { CustomizationManager } from '../utils/CustomizationManager';
 import { DashboardConfig } from '../config/DashboardConfig';
 import { Entity, CardConfig } from '../types/types';
 import { localize } from '../utils/LocalizationService';
+import { escapeHtml } from '../utils/html';
 
 export class FavoritesSection {
   private customizationManager: CustomizationManager;
@@ -34,14 +35,8 @@ export class FavoritesSection {
           return null;
         }
         
-        // Check if entity is hidden in the entity registry
-        const entityRegistry = hass.entities?.[entityId];
-        if (entityRegistry && entityRegistry.hidden_by) {
-          return null;
-        }
-        
-        // Check if entity is disabled in the entity registry
-        if (entityRegistry && entityRegistry.disabled_by) {
+        // hass.entities is the display registry: it exposes `hidden`, not `hidden_by`
+        if (hass.entities?.[entityId]?.hidden) {
           return null;
         }
         
@@ -88,19 +83,18 @@ export class FavoritesSection {
 
     // Create cards for each favorite entity in the correct order
     for (const entity of orderedEntities) {
-      await this.createAndAppendCard(entity, cardsContainer, hass, onTallToggle);
+      await this.createAndAppendCard(entity, cardsContainer, hass);
     }
   }
 
   private async createAndAppendCard(
     entity: Entity,
     container: HTMLElement,
-    hass: any,
-    onTallToggle?: (entityId: string, areaId: string) => void | Promise<void | boolean>
+    hass: any
   ): Promise<void> {
     try {
       // Create card config using the same pattern as AreaSection
-      const cardConfig = this.createEntityCard(entity.entity_id, hass, entity);
+      const cardConfig = this.createEntityCard(entity.entity_id, hass);
       if (!cardConfig) {
         console.warn(`Failed to create card config for entity: ${entity.entity_id}`);
         return;
@@ -128,7 +122,7 @@ export class FavoritesSection {
           }
         } else {
           cardElement = document.createElement('div');
-          cardElement.innerHTML = `<div style="color: red;">Unknown card type: ${cardConfig.type}</div>`;
+          cardElement.innerHTML = `<div style="color: red;">Unknown card type: ${escapeHtml(cardConfig.type)}</div>`;
         }
       }
       
@@ -146,7 +140,7 @@ export class FavoritesSection {
     }
   }
 
-  private createEntityCard(entityId: string, hass: any, entity?: Entity): CardConfig | null {
+  private createEntityCard(entityId: string, hass: any): CardConfig | null {
     const state = hass.states[entityId];
     if (!state) {
       console.warn(`Entity ${entityId} not found in hass.states`);
@@ -174,31 +168,5 @@ export class FavoritesSection {
     }
     
     return card;
-  }
-
-  private applyCardStyling(cardElement: any, entity: Entity): void {
-    const state = cardElement.hass.states[entity.entity_id];
-    if (!state) return;
-    
-    const domain = entity.entity_id.split('.')[0];
-    const entityData = DashboardConfig.getEntityData(state, domain, false, false, cardElement.hass);
-    
-    if (entityData) {
-      const styles = {
-        '--card-primary-color': entityData.textColor,
-        '--card-background-color': entityData.backgroundColor,
-        '--primary-text-color': entityData.textColor,
-        '--secondary-text-color': entityData.textColor + '80',
-        '--icon-color': entityData.iconColor,
-        '--rgb-primary-color': entityData.iconBackgroundColor,
-        '--mush-rgb-primary': entityData.iconBackgroundColor?.replace('#', '').match(/.{2}/g)?.map(x => parseInt(x, 16)).join(', ') || '255, 175, 0'
-      };
-      
-      Object.entries(styles).forEach(([property, value]) => {
-        if (value) {
-          cardElement.style.setProperty(property, value);
-        }
-      });
-    }
   }
 }

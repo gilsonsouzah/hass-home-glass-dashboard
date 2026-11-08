@@ -1,10 +1,11 @@
 import { CustomizationManager } from '../utils/CustomizationManager';
 import { CardManager } from '../utils/CardManager';
-import { DataService } from '../utils/DataService';
-import { Entity, CardConfig, Area } from '../types/types';
+import { Entity, CardConfig } from '../types/types';
 import { DashboardConfig } from '../config/DashboardConfig';
 import { localize } from '../utils/LocalizationService';
 import { liquidGlassCSS, LiquidGlassClasses } from '../utils/LiquidGlassStyles';
+import { escapeHtml } from '../utils/html';
+import { summarizeSecurity } from './chipStatus';
 
 export interface StatusData {
   domain: string;
@@ -16,94 +17,83 @@ export interface StatusData {
 }
 
 export class StatusSection {
-  private customizationManager: CustomizationManager;
   private cardManager?: CardManager;
   private _hass?: any;
   private statusItems: StatusData[] = [];
   private _entities?: Entity[];
-  private _areaId?: string;
   private _container?: HTMLElement;
+  private statusSection?: HTMLElement;
+  private modalCards: HTMLElement[] = [];
 
   constructor(customizationManager: CustomizationManager, cardManager?: CardManager) {
-    this.customizationManager = customizationManager;
     this.cardManager = cardManager || new CardManager(customizationManager);
   }
 
   set hass(hass: any) {
     this._hass = hass;
-    // Update existing status section if it exists
     if (this._container && this._entities) {
-      this.updateStatus(this._entities, hass, this._areaId);
+      this.updateStatus(this._entities, hass);
     }
+    this.modalCards.forEach((card) => ((card as any).hass = hass));
   }
 
   /**
-   * Render status section for a specific area or group
+   * Render status section for a specific area or group.
+   * ponytail: `_areaId` is unused; RoomPage/GroupPage still pass it, drop it there first.
    */
-  async render(container: HTMLElement, entities: Entity[], hass: any, areaId?: string): Promise<void> {
+  async render(container: HTMLElement, entities: Entity[], hass: any, _areaId?: string): Promise<void> {
     this._hass = hass;
     this._entities = entities;
-    this._areaId = areaId;
     this._container = container;
 
-    // Generate status data
+    // The wrapper exists even with no visible chip so a chip that appears later has a place to go.
+    this.statusSection = document.createElement('div');
+    this.statusSection.className = 'apple-status-section';
+    container.appendChild(this.statusSection);
+
     this.statusItems = this.generateStatusData(entities, hass);
+    this.fillStatusSection();
+  }
 
-    // Filter out items with no entities
+  private fillStatusSection(): void {
+    const section = this.statusSection;
+    if (!section) return;
+
     const visibleItems = this.statusItems.filter((item) => item.isVisible);
-
-    if (visibleItems.length === 0) {
-      return; // Don't render empty section
-    }
-
-    // Create status section container
-    const statusSection = document.createElement('div');
-    statusSection.className = 'apple-status-section';
-
-    // Generate HTML with embedded styles (like HomeChips)
-    statusSection.innerHTML = this.generateHTML(visibleItems, areaId);
-
-    container.appendChild(statusSection);
-
-    // Attach event listeners after DOM is created
-    this.attachEventListeners(statusSection, areaId);
+    section.style.display = visibleItems.length === 0 ? 'none' : '';
+    section.innerHTML = visibleItems.length > 0 ? this.generateHTML(visibleItems) : '';
+    this.attachEventListeners(section);
   }
 
   /**
-   * Update existing status section with new hass data
+   * Patch chip values in place; rebuild only when the set of visible chips changes.
    */
-  private async updateStatus(entities: Entity[], hass: any, areaId?: string): Promise<void> {
-    if (!this._container) return;
+  private updateStatus(entities: Entity[], hass: any): void {
+    const section = this.statusSection;
+    if (!section?.isConnected) return;
 
-    // Find existing status section
-    const existingStatusSection = this._container.querySelector('.apple-status-section');
-    if (!existingStatusSection) return;
-
-    // Generate new status data
+    const visibleDomains = (items: StatusData[]) =>
+      items
+        .filter((item) => item.isVisible)
+        .map((item) => item.domain)
+        .join();
     const newStatusItems = this.generateStatusData(entities, hass);
-    const newVisibleItems = newStatusItems.filter((item) => item.isVisible);
+    const setChanged = visibleDomains(newStatusItems) !== visibleDomains(this.statusItems);
+    this.statusItems = newStatusItems;
 
-    // If no visible items, remove the section
-    if (newVisibleItems.length === 0) {
-      existingStatusSection.remove();
+    if (setChanged) {
+      this.fillStatusSection();
       return;
     }
 
-    // Update only the values in the existing DOM elements
-    newVisibleItems.forEach((item) => {
-      const chipElement = existingStatusSection.querySelector(`[data-domain="${item.domain}"]`);
-      if (chipElement) {
-        const valueElement = chipElement.querySelector('.status-chip-value');
-        if (valueElement) {
-          valueElement.textContent = item.value;
-        }
-        // Update entity ids in case they changed
-        chipElement.setAttribute('data-entity-ids', item.entityIds.join(','));
-      }
-    });
-
-    // Update stored status items
-    this.statusItems = newStatusItems;
+    newStatusItems
+      .filter((item) => item.isVisible)
+      .forEach((item) => {
+        const chipElement = section.querySelector(`[data-domain="${item.domain}"]`);
+        const valueElement = chipElement?.querySelector('.status-chip-value');
+        if (valueElement && valueElement.textContent !== item.value) valueElement.textContent = item.value;
+        chipElement?.setAttribute('data-entity-ids', item.entityIds.join(','));
+      });
   }
 
   private generateStatusData(entities: Entity[], hass: any): StatusData[] {
@@ -283,11 +273,7 @@ export class StatusSection {
     }
 
     // General contact sensors (not doors or windows)
-    else if (
-      domain === 'binary_sensor' &&
-      deviceClass === 'opening' &&
-      !['door', 'window'].includes(deviceClass || '')
-    ) {
+    else if (domain === 'binary_sensor' && deviceClass === 'opening') {
       statusMap.get('contact')?.entityIds.push(entityId);
     }
 
@@ -297,7 +283,7 @@ export class StatusSection {
     }
 
     // Speakers (other media players)
-    else if (domain === 'media_player' && deviceClass !== 'tv' && !entityId.includes('tv')) {
+    else if (domain === 'media_player') {
       statusMap.get('speakers')?.entityIds.push(entityId);
     }
   }
@@ -440,7 +426,7 @@ export class StatusSection {
     return `${min}%-${max}%`;
   }
 
-  private generateHTML(statusItems: StatusData[], areaId?: string): string {
+  private generateHTML(statusItems: StatusData[]): string {
     return `
       <style>
         .apple-status-section {
@@ -529,19 +515,18 @@ export class StatusSection {
           opacity: 0.9;
         }
       </style>
-      <div class="apple-status-section">
         <div class="status-carousel-container">
           <div class="status-chips-grid">
             ${statusItems
               .map(
                 (item) => `
-              <div class="status-chip" data-domain="${item.domain}" data-entity-ids="${item.entityIds.join(',')}">
+              <div class="status-chip" role="button" tabindex="0" data-domain="${escapeHtml(item.domain)}" data-entity-ids="${escapeHtml(item.entityIds.join(','))}">
                 <div class="status-chip-icon">
-                  <ha-icon icon="${item.icon}"></ha-icon>
+                  <ha-icon icon="${escapeHtml(item.icon)}"></ha-icon>
                 </div>
                 <div class="status-chip-content">
-                  <span class="status-chip-label">${item.label}</span>
-                  <span class="status-chip-value">${item.value}</span>
+                  <span class="status-chip-label">${escapeHtml(item.label)}</span>
+                  <span class="status-chip-value">${escapeHtml(item.value)}</span>
                 </div>
               </div>
             `
@@ -549,31 +534,20 @@ export class StatusSection {
               .join('')}
           </div>
         </div>
-      </div>
     `;
   }
 
-  private attachEventListeners(statusSection: HTMLElement, areaId?: string): void {
-    const chips = statusSection.querySelectorAll('.status-chip');
-    chips.forEach((chip) => {
-      chip.addEventListener('click', () => {
-        const domain = chip.getAttribute('data-domain');
-        const entityIds = chip.getAttribute('data-entity-ids')?.split(',') || [];
-
-        const statusData: StatusData = {
-          domain: domain || '',
-          icon: '',
-          label: domain || '',
-          value: '',
-          entityIds,
-          isVisible: true,
-        };
-
-        // Find the full status data
-        const fullStatusData = this.statusItems.find((item) => item.domain === domain);
-        if (fullStatusData) {
-          this.handleStatusChipClick(fullStatusData, areaId);
-        }
+  private attachEventListeners(statusSection: HTMLElement): void {
+    statusSection.querySelectorAll<HTMLElement>('.status-chip').forEach((chip) => {
+      const open = () => {
+        const item = this.statusItems.find((i) => i.domain === chip.getAttribute('data-domain'));
+        if (item) this.handleStatusChipClick(item);
+      };
+      chip.addEventListener('click', open);
+      chip.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        open();
       });
     });
   }
@@ -599,11 +573,10 @@ export class StatusSection {
       return state?.state?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown';
     }
 
-    const armed = entityIds.filter((id) => {
-      const state = hass.states[id];
-      return state && state.state !== 'disarmed' && state.state.includes('armed');
-    }).length;
-
+    const { armed, triggered } = summarizeSecurity(
+      entityIds.map((id) => ({ entity_id: id, state: hass.states[id]?.state ?? '' }))
+    );
+    if (triggered > 0) return `${triggered} ${localize('status.triggered')}`;
     return armed === 0 ? localize('status.disarmed') : `${armed} ${localize('status.armed')}`;
   }
 
@@ -622,11 +595,12 @@ export class StatusSection {
     }
   }
 
+  private countOn(entityIds: string[], hass: any): number {
+    return entityIds.filter((id) => hass.states[id]?.state === 'on').length;
+  }
+
   private calculateMotionStatus(entityIds: string[], hass: any): string {
-    const activeCount = entityIds.filter((id) => {
-      const state = hass.states[id];
-      return state && state.state === 'on';
-    }).length;
+    const activeCount = this.countOn(entityIds, hass);
 
     if (activeCount === 0) {
       return localize('motion.not_detected');
@@ -638,10 +612,7 @@ export class StatusSection {
   }
 
   private calculateOccupancyStatus(entityIds: string[], hass: any): string {
-    const activeCount = entityIds.filter((id) => {
-      const state = hass.states[id];
-      return state && state.state === 'on';
-    }).length;
+    const activeCount = this.countOn(entityIds, hass);
 
     if (activeCount === 0) {
       return localize('occupancy.not_detected');
@@ -679,37 +650,25 @@ export class StatusSection {
   }
 
   private calculateSmokeStatus(entityIds: string[], hass: any): string {
-    const detectedCount = entityIds.filter((id) => {
-      const state = hass.states[id];
-      return state && state.state === 'on';
-    }).length;
+    const detectedCount = this.countOn(entityIds, hass);
 
     return detectedCount === 0 ? localize('smoke.not_detected') : localize('smoke.detected');
   }
 
   private calculateGasStatus(entityIds: string[], hass: any): string {
-    const detectedCount = entityIds.filter((id) => {
-      const state = hass.states[id];
-      return state && state.state === 'on';
-    }).length;
+    const detectedCount = this.countOn(entityIds, hass);
 
     return detectedCount === 0 ? localize('gas.not_detected') : localize('gas.detected');
   }
 
   private calculateFloodStatus(entityIds: string[], hass: any): string {
-    const detectedCount = entityIds.filter((id) => {
-      const state = hass.states[id];
-      return state && state.state === 'on';
-    }).length;
+    const detectedCount = this.countOn(entityIds, hass);
 
     return detectedCount === 0 ? localize('flood.not_detected') : localize('flood.detected');
   }
 
   private calculateContactStatus(entityIds: string[], hass: any): string {
-    const openCount = entityIds.filter((id) => {
-      const state = hass.states[id];
-      return state && state.state === 'on';
-    }).length;
+    const openCount = this.countOn(entityIds, hass);
 
     if (openCount === 0) {
       return localize('contact.all_closed');
@@ -732,7 +691,7 @@ export class StatusSection {
 
     const onCount = entityIds.filter((id) => {
       const state = hass.states[id];
-      return state && state.state !== 'off' && state.state !== 'unavailable' && state.state !== 'standby';
+      return state && !['off', 'unavailable', 'unknown', 'standby'].includes(state.state);
     }).length;
 
     if (onCount === 0) {
@@ -744,13 +703,13 @@ export class StatusSection {
     }
   }
 
-  private handleStatusChipClick(statusData: StatusData, areaId?: string): void {
+  private handleStatusChipClick(statusData: StatusData): void {
     if (statusData.entityIds.length === 1) {
       // Single entity - open native Home Assistant more info
       this.openMoreInfoDialog(statusData.entityIds[0]);
     } else {
       // Multiple entities - open modal with cards
-      this.openStatusModal(statusData, areaId);
+      this.openStatusModal(statusData);
     }
   }
 
@@ -787,65 +746,21 @@ export class StatusSection {
     }
   }
 
-  private async groupEntitiesByArea(entityIds: string[]): Promise<{ [areaId: string]: string[] }> {
+  /** Resolves each entity's area from hass.entities (display registry), falling back to its device. */
+  private groupEntitiesByArea(entityIds: string[]): { [areaId: string]: string[] } {
     const entitiesByArea: { [areaId: string]: string[] } = {};
 
-    // Get areas, devices, and entities from Home Assistant
-    let areas: Area[] = [];
-    let devices: any[] = [];
-    let entities: Entity[] = [];
-    try {
-      areas = await DataService.getAreas(this._hass);
-      devices = await DataService.getDevices(this._hass);
-      entities = await DataService.getEntities(this._hass);
-    } catch (error) {
-      // Silently handle error
-    }
-
-    // Initialize areas
-    areas.forEach((area) => {
-      entitiesByArea[area.area_id] = [];
-    });
-
-    // Group entities by area (entities without area are skipped)
     for (const entityId of entityIds) {
-      // Find the entity in the registry
-      const entityRegistry = entities.find((e) => e.entity_id === entityId);
-
-      let entityAreaId = entityRegistry?.area_id;
-
-      // If entity doesn't have an area but has a device, check device's area
-      if (!entityAreaId && entityRegistry?.device_id) {
-        const device = devices.find((d) => d.id === entityRegistry.device_id);
-        if (device?.area_id) {
-          entityAreaId = device.area_id;
-        }
-      }
-
-      // Skip entities without area
-      if (!entityAreaId) {
-        continue;
-      }
-
-      // Initialize area if it doesn't exist (shouldn't happen, but just in case)
-      if (!entitiesByArea[entityAreaId]) {
-        entitiesByArea[entityAreaId] = [];
-      }
-
-      entitiesByArea[entityAreaId].push(entityId);
+      const entry = this._hass.entities?.[entityId];
+      const areaId = entry?.area_id || (entry?.device_id && this._hass.devices?.[entry.device_id]?.area_id);
+      if (!areaId) continue;
+      (entitiesByArea[areaId] ||= []).push(entityId);
     }
-
-    // Remove empty areas
-    Object.keys(entitiesByArea).forEach((areaId) => {
-      if (entitiesByArea[areaId].length === 0) {
-        delete entitiesByArea[areaId];
-      }
-    });
 
     return entitiesByArea;
   }
 
-  private async openStatusModal(statusData: StatusData, areaId?: string): Promise<void> {
+  private async openStatusModal(statusData: StatusData): Promise<void> {
     // Create modal backdrop
     const modal = document.createElement('div');
     modal.className = 'status-modal-backdrop';
@@ -858,10 +773,10 @@ export class StatusSection {
     const header = document.createElement('div');
     header.className = 'status-modal-header';
     header.innerHTML = `
-      <button class="modal-close ${LiquidGlassClasses.modalCancel}">
+      <button class="modal-close ${LiquidGlassClasses.modalCancel}" aria-label="Close">
         <ha-icon icon="mdi:close"></ha-icon>
       </button>
-      <h2>${statusData.label}</h2>
+      <h2>${escapeHtml(statusData.label)}</h2>
     `;
 
     // Modal body
@@ -869,30 +784,18 @@ export class StatusSection {
     body.className = 'status-modal-body';
 
     // Group entities by room
-    const entitiesByArea = await this.groupEntitiesByArea(statusData.entityIds);
+    const entitiesByArea = this.groupEntitiesByArea(statusData.entityIds);
 
     // Create sections for each room
     for (const [roomAreaId, roomEntityIds] of Object.entries(entitiesByArea) as [string, string[]][]) {
       if (roomEntityIds.length === 0) continue;
 
-      // Get area name (capitalized like home screen titles)
-      let areaName = roomAreaId;
-      if (roomAreaId !== 'no_area') {
-        try {
-          const areas = await DataService.getAreas(this._hass);
-          const area = areas.find((a: Area) => a.area_id === roomAreaId);
-          areaName = area?.name || roomAreaId;
-        } catch (error) {
-          // Silently handle error
-        }
-      } else {
-        areaName = localize('pages.default_room');
-      }
+      const areaName = this._hass.areas?.[roomAreaId]?.name || roomAreaId;
 
       // Create room title
       const roomTitle = document.createElement('div');
       roomTitle.className = 'status-modal-room-title';
-      roomTitle.innerHTML = `<span>${areaName}</span>`;
+      roomTitle.innerHTML = `<span>${escapeHtml(areaName)}</span>`;
       body.appendChild(roomTitle);
 
       // Create cards grid for this room
@@ -905,12 +808,16 @@ export class StatusSection {
         const cardConfig = this.createEntityCard(entityId, this._hass);
         if (cardConfig) {
           await this.createAndAppendCard(cardConfig, cardsGrid, this._hass, roomAreaId);
+
         }
       }
 
       body.appendChild(cardsGrid);
     }
 
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', statusData.label);
     modalContent.appendChild(header);
     modalContent.appendChild(body);
     modal.appendChild(modalContent);
@@ -918,10 +825,19 @@ export class StatusSection {
     // Add event listeners
     const closeBtn = header.querySelector('.modal-close');
 
+    // Modal cards live in document.body, outside HomeView's hass fan-out, so the hass setter feeds them.
+    const cards = Array.from(modal.querySelectorAll<HTMLElement>('.entity-card-wrapper > *'));
+    this.modalCards.push(...cards);
+    const onKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeModal();
+    };
     const closeModal = () => {
+      document.removeEventListener('keydown', onKeydown);
+      this.modalCards = this.modalCards.filter((card) => !cards.includes(card));
       modal.classList.remove('show');
       setTimeout(() => modal.remove(), 300);
     };
+    document.addEventListener('keydown', onKeydown);
 
     closeBtn?.addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => {
@@ -1346,14 +1262,6 @@ export class StatusSection {
 
         .status-modal-backdrop.show .status-modal-content {
           transform: translateY(0);
-        }
-
-        .status-card-wrapper {
-          height: 120px;
-        }
-
-        .status-card-wrapper.tall {
-          height: 240px;
         }
       }
     `;

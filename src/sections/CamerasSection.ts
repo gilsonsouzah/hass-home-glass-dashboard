@@ -4,6 +4,10 @@ import { Entity, CardConfig } from '../types/types';
 import { DashboardConfig } from '../config/DashboardConfig';
 import { localize } from '../utils/LocalizationService';
 import { RTLHelper } from '../utils/RTLHelper';
+import { escapeHtml } from '../utils/html';
+import { navigateToDashboardPath } from './navigation';
+import { setupDragScroll } from './dragScroll';
+import { splitBySavedOrder } from './carouselOrder';
 
 export class CamerasSection {
   private customizationManager: CustomizationManager;
@@ -24,7 +28,7 @@ export class CamerasSection {
     sectionId: string = 'cameras_section'
   ): Promise<void> {
     // Apply saved carousel order if available
-    const sortedCameras = await this.sortCamerasByOrder(camerasEntities, sectionId, context);
+    const sortedCameras = this.sortCamerasByOrder(camerasEntities, sectionId, context);
     
     // Add cameras section title with navigation
     const titleDiv = document.createElement('div');
@@ -38,7 +42,7 @@ export class CamerasSection {
       
       // Add click handler to the wrapper
       clickableWrapper.addEventListener('click', () => {
-        this.navigateToPath('cameras');
+        navigateToDashboardPath('cameras');
       });
       
       titleDiv.appendChild(clickableWrapper);
@@ -75,7 +79,7 @@ export class CamerasSection {
     carouselContainer.appendChild(carouselGrid);
     
     // Add click-and-drag scrolling for desktop users
-    this.setupDragScroll(carouselContainer);
+    setupDragScroll(carouselContainer);
     
     container.appendChild(carouselContainer);
   }
@@ -152,7 +156,7 @@ export class CamerasSection {
           }
         } else {
           cardElement = document.createElement('div');
-          cardElement.innerHTML = `<div style="color: red;">Unknown card type: ${cardConfig.type}</div>`;
+          cardElement.innerHTML = `<div style="color: red;">Unknown card type: ${escapeHtml(cardConfig.type)}</div>`;
         }
       }
       
@@ -217,139 +221,9 @@ export class CamerasSection {
     }
   }
 
-  private navigateToPath(path: string) {
-    const currentPath = window.location.pathname;
-    let basePath = '';
-    
-    // Handle different dashboard URL patterns
-    if (currentPath.startsWith('/lovelace/')) {
-      basePath = '/lovelace/';
-    } else if (currentPath === '/lovelace') {
-      basePath = '/lovelace/';
-    } else {
-      // Custom dashboard: extract the dashboard name
-      const pathParts = currentPath.split('/').filter(part => part.length > 0);
-      if (pathParts.length > 0) {
-        basePath = `/${pathParts[0]}/`;
-      } else {
-        basePath = '/lovelace/';
-      }
-    }
-    
-    // Clean path and construct full URL
-    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-    const newUrl = `${basePath}${cleanPath}`;
-    
-    // Navigate using Home Assistant's system
-    window.history.pushState(null, '', newUrl);
-    const event = new Event('location-changed', { bubbles: true, composed: true });
-    window.dispatchEvent(event);
-  }
-
-  private async sortCamerasByOrder(camerasEntities: Entity[], areaId: string, context: string = 'home'): Promise<Entity[]> {
-    try {
-      // Check if there's a saved manual order for cameras
-      const savedOrder = this.customizationManager.getSavedCarouselOrderWithContext(areaId, 'cameras', context);
-      if (savedOrder && savedOrder.length > 0) {
-        // Apply saved order, similar to how scenes are ordered
-        const entityMap = new Map(camerasEntities.map(entity => [entity.entity_id, entity]));
-        const orderedCameras: Entity[] = [];
-        
-        // First, add cameras in the saved order
-        savedOrder.forEach((entityId: string) => {
-          if (entityMap.has(entityId)) {
-            orderedCameras.push(entityMap.get(entityId)!);
-            entityMap.delete(entityId); // Remove from map to avoid duplicates
-          }
-        });
-        
-        // Then, add any new cameras that weren't in the saved order
-        const remainingCameras = Array.from(entityMap.values());
-        orderedCameras.push(...remainingCameras);
-        
-        return orderedCameras;
-      }
-      
-      // Default behavior: return cameras in original order
-      return camerasEntities;
-    } catch (error) {
-      console.error('Error sorting cameras by order:', error);
-      return camerasEntities;
-    }
-  }
-
-  /**
-   * Setup click-and-drag scrolling for desktop users
-   */
-  private setupDragScroll(container: HTMLElement): void {
-    let isDown = false;
-    let startX: number;
-    let scrollLeft: number;
-    let hasDragged = false;
-    const dragThreshold = 5; // Minimum pixels moved to consider it a drag
-
-    // Function to check if container has overflow and update cursor
-    const updateDragState = () => {
-      const hasOverflow = container.scrollWidth > container.clientWidth;
-      if (hasOverflow) {
-        container.style.cursor = 'grab';
-      } else {
-        container.style.cursor = '';
-      }
-      return hasOverflow;
-    };
-
-    // Initial check
-    setTimeout(updateDragState, 100);
-
-    container.addEventListener('mousedown', (e) => {
-      // Skip if reordering is in progress or not left button or no overflow
-      const { DragAndDropManager } = require('../utils/DragAndDropManager');
-      if (DragAndDropManager.isReordering || e.button !== 0 || !updateDragState()) return;
-      
-      isDown = true;
-      hasDragged = false;
-      container.style.cursor = 'grabbing';
-      startX = e.pageX - container.offsetLeft;
-      scrollLeft = container.scrollLeft;
-    });
-
-    container.addEventListener('mouseleave', () => {
-      isDown = false;
-      updateDragState();
-    });
-
-    container.addEventListener('mouseup', () => {
-      isDown = false;
-      updateDragState();
-    });
-
-    container.addEventListener('mousemove', (e) => {
-      // Stop if reordering started or not dragging
-      const { DragAndDropManager } = require('../utils/DragAndDropManager');
-      if (!isDown || DragAndDropManager.isReordering) {
-        if (DragAndDropManager.isReordering) isDown = false; // Reset state
-        return;
-      }
-      e.preventDefault();
-      const x = e.pageX - container.offsetLeft;
-      const walk = x - startX;
-      
-      // Mark as dragged if moved beyond threshold
-      if (Math.abs(walk) > dragThreshold) {
-        hasDragged = true;
-      }
-      
-      container.scrollLeft = scrollLeft - walk;
-    });
-
-    // Prevent click events on cards when dragging
-    container.addEventListener('click', (e) => {
-      if (hasDragged) {
-        e.preventDefault();
-        e.stopPropagation();
-        hasDragged = false;
-      }
-    }, true);
+  private sortCamerasByOrder(camerasEntities: Entity[], areaId: string, context: string = 'home'): Entity[] {
+    const savedOrder = this.customizationManager.getSavedCarouselOrderWithContext(areaId, 'cameras', context) || [];
+    const { ordered, remaining } = splitBySavedOrder(camerasEntities, savedOrder);
+    return [...ordered, ...remaining];
   }
 }
