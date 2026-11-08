@@ -53,7 +53,9 @@
     "error": "Fout",
     "heat_to": "Verwarmen naar",
     "cool_to": "Koelen naar",
-    "none": "Geen"
+    "none": "Geen",
+    "detected": "Gedetecteerd",
+    "current": "Huidig"
   },
   "units": {
     "percent": "%",
@@ -281,7 +283,8 @@
     "show_cost": "Kosten Tonen",
     "show_cost_description": "Toont kostencijfers op het energiedashboard indien beschikbaar",
     "show_gas": "Gas Tonen",
-    "show_gas_description": "Toont gasverbruik op het startscherm en energiedashboard indien geconfigureerd"
+    "show_gas_description": "Toont gasverbruik op het startscherm en energiedashboard indien geconfigureerd",
+    "no_entities_found": "Geen entiteiten gevonden"
   },
   "status_messages": {
     "unavailable": "Niet beschikbaar",

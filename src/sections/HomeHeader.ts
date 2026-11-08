@@ -3,10 +3,9 @@ import { SectionReorderManager } from '../utils/SectionReorderManager';
 import { CustomizationManager } from '../utils/CustomizationManager';
 import { EditModeManager } from '../utils/EditModeManager';
 import { HomeSettingsManager } from '../utils/HomeSettingsManager';
-import { HomeChips, ChipsConfig } from './HomeChips';
-import { DeviceGroup } from '../config/DashboardConfig';
-import { EntityState } from '../types/types';
+import { HomeChips } from './HomeChips';
 import { localize } from '../utils/LocalizationService';
+import { escapeHtml } from '../utils/html';
 import { RTLHelper } from '../utils/RTLHelper';
 import { injectLiquidGlassStyles, LiquidGlassClasses, liquidGlassCSS } from '../utils/LiquidGlassStyles';
 
@@ -16,17 +15,13 @@ export interface HeaderConfig {
   isSpecialPage?: boolean;
   showMenu: boolean;
   showBackButton?: boolean;
-  chipsElement?: HTMLElement;
 }
 
 export class HomeHeader {
-  private static instance: HomeHeader | null = null;
   private headerElement?: HTMLElement;
-  private titleElement?: HTMLElement;
   private scrolledTitleElement?: HTMLElement;
   private menuButton?: HTMLButtonElement;
   private dropdown?: HTMLElement;
-  private chipsContainer?: HTMLElement;
   private scrolledChipsContainer?: HTMLElement;
   private isDropdownOpen = false;
   private currentConfig: HeaderConfig = { title: localize('pages.my_home'), isGroupPage: false, showMenu: true };
@@ -43,18 +38,10 @@ export class HomeHeader {
   private clickOutsideListener?: (e: Event) => void;
   private escapeKeyListener?: (e: KeyboardEvent) => void;
   private sidebarObserver?: MutationObserver | ResizeObserver;
-  private tempSidebarCloseHandler?: (e: Event) => void;
 
-  // Allow both singleton and instance creation for stateless architecture
-  constructor(forceInstance = false) {
+  // ponytail: _forceInstance is unused; HomeView still passes it, drop it when HomeView stops.
+  constructor(_forceInstance = false) {
     this.uiManager = HomeAssistantUIManager.getInstance();
-  }
-
-  static getInstance(): HomeHeader {
-    if (!HomeHeader.instance) {
-      HomeHeader.instance = new HomeHeader();
-    }
-    return HomeHeader.instance;
   }
 
   /**
@@ -130,7 +117,7 @@ export class HomeHeader {
     if (containerChanged || !this.headerElement) {
       this.cleanup();
       this.currentConfig = { ...config }; // Update config before creating
-      await this.createHeaderStructure();
+      this.createHeaderStructure();
       this.setupEventListeners();
       this.setupScrollBehavior();
     } else if (configChanged) {
@@ -174,24 +161,6 @@ export class HomeHeader {
     if (this.scrolledTitleElement) {
       this.scrolledTitleElement.textContent = title;
     }
-  }
-
-  /**
-   * Force update the title directly in the DOM, bypassing any caching
-   */
-  forceUpdateTitle(title: string) {
-    this.currentConfig.title = title;
-
-    // Force update the DOM element regardless of previous state
-    if (this.scrolledTitleElement) {
-      this.scrolledTitleElement.textContent = title;
-    }
-
-    // Also update any other title elements that might exist
-    const titleElements = this.headerElement?.querySelectorAll('.apple-header-scrolled-title');
-    titleElements?.forEach((element: Element) => {
-      element.textContent = title;
-    });
   }
 
   /**
@@ -376,7 +345,7 @@ export class HomeHeader {
     }
   }
 
-  private async createHeaderStructure() {
+  private createHeaderStructure() {
     if (!this.container) {
       console.error('No container available for header creation');
       return;
@@ -406,7 +375,7 @@ export class HomeHeader {
           }
           <div class="apple-header-scrolled">
             <div class="apple-header-scrolled-title-container">
-              <h2 class="apple-header-scrolled-title">${this.currentConfig.title}</h2>
+              <h2 class="apple-header-scrolled-title">${escapeHtml(this.currentConfig.title)}</h2>
             </div>
             <div class="apple-header-scrolled-chips"></div>
           </div>
@@ -475,7 +444,7 @@ export class HomeHeader {
             }
             <div class="apple-header-scrolled">
               <div class="apple-header-scrolled-title-container">
-                <h2 class="apple-header-scrolled-title">${this.currentConfig.title}</h2>
+                <h2 class="apple-header-scrolled-title">${escapeHtml(this.currentConfig.title)}</h2>
               </div>
               <div class="apple-header-scrolled-chips"></div>
             </div>
@@ -530,7 +499,7 @@ export class HomeHeader {
 
       // Load dropdown content asynchronously
       if (this.dropdown) {
-        this.dropdown.innerHTML = await this.getDropdownContent();
+        this.dropdown.innerHTML = this.getDropdownContent();
       }
     }
 
@@ -686,9 +655,9 @@ export class HomeHeader {
           const areaName = area.name || areaId;
           const isActive = currentRoomId === areaId;
           return `
-            <div class="dropdown-item room-item${isActive ? ' active' : ''}" data-room-id="${areaId}">
+            <div class="dropdown-item room-item${isActive ? ' active' : ''}" data-room-id="${escapeHtml(areaId)}">
               <span class="room-checkmark"></span>
-              <span>${areaName}</span>
+              <span>${escapeHtml(areaName)}</span>
             </div>
           `;
         })
@@ -721,16 +690,6 @@ export class HomeHeader {
         e.stopPropagation();
         this.openSidebar();
       });
-    }
-
-    // Window resize listener to update button visibility based on mobile/desktop
-    if (!this.resizeListener) {
-      this.resizeListener = () => {
-        setTimeout(() => {
-          this.updateSidebarButtonVisibility();
-        }, 100); // Debounce resize events
-      };
-      window.addEventListener('resize', this.resizeListener);
     }
 
     if (!this.menuButton || !this.dropdown) return;
@@ -864,11 +823,10 @@ export class HomeHeader {
       }
     };
 
-    // Resize listener to update header positioning and HA header height
     this.resizeListener = () => {
       requestAnimationFrame(() => {
-        // Update HA header height for sticky positioning (all pages)
         this.updateHAHeaderHeight();
+        this.updateSidebarButtonVisibility();
 
         // Update fixed header positioning only for group pages
         if (this.currentConfig.isGroupPage) {
@@ -1050,9 +1008,7 @@ export class HomeHeader {
 
     const buttonRect = this.menuButton.getBoundingClientRect();
     const dropdownHeight = this.dropdown.offsetHeight;
-    const dropdownWidth = this.dropdown.offsetWidth;
     const viewportHeight = window.innerHeight;
-    const viewportWidth = window.innerWidth;
     const spaceBelow = viewportHeight - buttonRect.bottom;
     const spaceAbove = buttonRect.top;
 
@@ -1064,35 +1020,8 @@ export class HomeHeader {
       this.dropdown.classList.add('dropdown-above');
     }
 
-    // Handle horizontal positioning for RTL
-    if (RTLHelper.isRTL()) {
-      const spaceOnLeft = buttonRect.left;
-      const spaceOnRight = viewportWidth - buttonRect.right;
-
-      // Reset positioning
-      this.dropdown.style.right = 'auto';
-      this.dropdown.style.left = 'auto';
-
-      // If dropdown would overflow on the left, adjust position
-      if (spaceOnLeft < dropdownWidth + 10) {
-        this.dropdown.style.left = '10px';
-      } else {
-        this.dropdown.style.left = '10px'; // Keep consistent with CSS
-      }
-    } else {
-      const spaceOnRight = viewportWidth - buttonRect.right;
-
-      // Reset positioning
-      this.dropdown.style.right = 'auto';
-      this.dropdown.style.left = 'auto';
-
-      // If dropdown would overflow on the right, adjust position
-      if (spaceOnRight < dropdownWidth + 10) {
-        this.dropdown.style.right = '10px';
-      } else {
-        this.dropdown.style.right = '10px'; // Keep consistent with CSS
-      }
-    }
+    this.dropdown.style.right = RTLHelper.isRTL() ? 'auto' : '10px';
+    this.dropdown.style.left = RTLHelper.isRTL() ? '10px' : 'auto';
   }
 
   private closeDropdown() {
@@ -1158,293 +1087,8 @@ export class HomeHeader {
         })
       );
     } catch (error) {
-      console.error('❌ HomeHeader: Error dispatching sidebar toggle event:', error);
-
-      // Fallback to manual approach if the event system fails
-      this.openSidebarManually();
+      console.error('HomeHeader: Error dispatching sidebar toggle event:', error);
     }
-  }
-
-  /**
-   * Fallback manual sidebar opening for when Home Assistant event system doesn't work
-   * (e.g., when sidebar is completely hidden by dashboard settings)
-   */
-  /**
-   * Fallback manual sidebar opening for when Home Assistant event system doesn't work
-   * (e.g., when sidebar is completely hidden by dashboard settings)
-   */
-  private openSidebarManually() {
-    try {
-      // Find elements using the same method as HomeAssistantUIManager
-      const homeAssistant = document.querySelector('home-assistant');
-      if (!homeAssistant?.shadowRoot) {
-        console.warn('❌ HomeHeader: Home Assistant element not found in fallback');
-        return;
-      }
-
-      const main = homeAssistant.shadowRoot.querySelector('home-assistant-main') as HTMLElement;
-      if (!main?.shadowRoot) {
-        console.warn('❌ HomeHeader: Home Assistant main element not found in fallback');
-        return;
-      }
-
-      const drawer = main.shadowRoot.querySelector('ha-drawer') as any;
-      if (!drawer) {
-        console.warn('❌ HomeHeader: HA drawer not found in fallback');
-        return;
-      }
-
-      const isMobile = window.innerWidth <= 768;
-
-      // Look for the app layout or main content area
-      const appDrawerLayout =
-        main.shadowRoot.querySelector('app-drawer-layout') || main.shadowRoot.querySelector('ha-app-layout');
-
-      if (appDrawerLayout) {
-        // Try to find the actual drawer mechanism
-        const actualDrawer = appDrawerLayout.querySelector('app-drawer') || appDrawerLayout.querySelector('mwc-drawer');
-
-        if (actualDrawer) {
-          // Try to open this drawer
-          if (typeof (actualDrawer as any).open === 'function') {
-            (actualDrawer as any).open();
-          } else if ((actualDrawer as any).opened !== undefined) {
-            (actualDrawer as any).opened = true;
-          }
-
-          // Create backdrop for both mobile and desktop
-          this.createSidebarBackdrop(actualDrawer);
-          return;
-        }
-      }
-
-      if (isMobile) {
-        // Mobile-specific manual approach
-
-        // First, try to find and trigger the native HA mobile menu
-        const haAppLayout = main.shadowRoot.querySelector('ha-app-layout');
-        const appDrawerLayoutFallback = main.shadowRoot.querySelector('app-drawer-layout');
-
-        if (haAppLayout || appDrawerLayoutFallback) {
-          const layout = (haAppLayout || appDrawerLayoutFallback) as HTMLElement;
-
-          // Try to find the drawer inside the layout
-          const layoutDrawer = layout.querySelector('app-drawer') as any;
-          if (layoutDrawer) {
-            // Set up smooth animation
-            layoutDrawer.style.transition = 'transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)';
-
-            // Open the drawer
-            if (typeof layoutDrawer.open === 'function') {
-              layoutDrawer.open();
-            } else {
-              layoutDrawer.opened = true;
-            }
-
-            // Create backdrop for click-outside behavior
-            this.createSidebarBackdrop(layoutDrawer);
-            return;
-          }
-        }
-
-        // Final fallback: Manual mobile drawer styling
-
-        // Style the drawer for mobile overlay
-        drawer.style.cssText = `
-          position: fixed !important;
-          top: 0 !important;
-          left: 0 !important;
-          height: 100vh !important;
-          width: 256px !important;
-          z-index: 101 !important;
-          transform: translateX(0px) !important;
-          visibility: visible !important;
-          display: block !important;
-          background: var(--sidebar-background-color, var(--card-background-color, #1e1e1e)) !important;
-          box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3) !important;
-          transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) !important;
-        `;
-
-        // Find and show sidebar content
-        const sidebarContent =
-          drawer.querySelector('ha-sidebar') ||
-          drawer.querySelector('[role="navigation"]') ||
-          drawer.querySelector('.mdc-drawer__content') ||
-          drawer.firstElementChild;
-
-        if (sidebarContent) {
-          (sidebarContent as HTMLElement).style.cssText = `
-            visibility: visible !important;
-            display: block !important;
-            height: 100% !important;
-            width: 100% !important;
-          `;
-        }
-
-        // Create backdrop
-        this.createSidebarBackdrop(drawer);
-      } else {
-        // Desktop approach - temporarily remove collapsed styles with animation
-        const wasCollapsed = main.hasAttribute('collapsed');
-
-        if (wasCollapsed) {
-          // Add transition for smooth animation
-          main.style.transition = 'margin-left 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)';
-          drawer.style.transition = 'transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)';
-
-          // Remove collapsed state
-          main.removeAttribute('collapsed');
-          main.style.removeProperty('--mdc-drawer-width');
-          main.style.removeProperty('--app-drawer-width');
-
-          // Ensure drawer is visible
-          drawer.style.transform = 'translateX(0px)';
-          drawer.style.visibility = 'visible';
-          drawer.style.display = 'block';
-
-          // Set up click outside to restore collapsed state
-          this.setupTemporarySidebarClose(drawer, main, true);
-        } else {
-          // If not collapsed, try to show it anyway
-          drawer.style.transform = 'translateX(0px)';
-          drawer.style.visibility = 'visible';
-          drawer.style.display = 'block';
-          drawer.style.transition = 'transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)';
-
-          this.createSidebarBackdrop(drawer);
-        }
-      }
-    } catch (error) {
-      console.error('❌ HomeHeader: Error in manual sidebar opening:', error);
-    }
-  }
-
-  /**
-   * Create a backdrop for mobile sidebar overlay
-   */
-  private createSidebarBackdrop(drawer: any) {
-    // Remove existing backdrop
-    const existingBackdrop = document.querySelector('.apple-sidebar-backdrop');
-    if (existingBackdrop) {
-      existingBackdrop.remove();
-    }
-
-    // Create new backdrop - only cover the area not occupied by sidebar
-    const backdrop = document.createElement('div');
-    backdrop.className = 'apple-sidebar-backdrop';
-
-    // RTL-aware positioning
-    const isRTL = RTLHelper.isRTL();
-    backdrop.style.cssText = `
-      position: fixed;
-      top: 0;
-      ${isRTL ? 'right' : 'left'}: 256px;
-      width: calc(100vw - 256px);
-      height: 100vh;
-      background: transparent;
-      z-index: 99;
-      pointer-events: all;
-    `;
-
-    // Add click handler to close sidebar
-    backdrop.addEventListener('click', () => {
-      this.closeMobileSidebar(drawer);
-    });
-
-    document.body.appendChild(backdrop);
-  }
-
-  /**
-   * Close mobile sidebar overlay
-   */
-  private closeMobileSidebar(drawer: any) {
-    // Check if this is an app-drawer that can be closed properly
-    if (typeof drawer.close === 'function') {
-      drawer.close();
-    } else if (drawer.opened !== undefined) {
-      drawer.opened = false;
-    } else {
-      // Manual close with animation
-      drawer.style.transform = 'translateX(-100%)';
-
-      // Clean up styles after animation
-      setTimeout(() => {
-        drawer.style.cssText = '';
-
-        // Also reset any nested content
-        const sidebarContent =
-          drawer.querySelector('ha-sidebar') ||
-          drawer.querySelector('[role="navigation"]') ||
-          drawer.querySelector('.mdc-drawer__content') ||
-          drawer.firstElementChild;
-
-        if (sidebarContent) {
-          (sidebarContent as HTMLElement).style.cssText = '';
-        }
-      }, 300); // Match transition duration
-    }
-
-    // Remove backdrop
-    const backdrop = document.querySelector('.apple-sidebar-backdrop');
-    if (backdrop) {
-      backdrop.remove();
-    }
-  }
-
-  /**
-   * Set up click-outside-to-close behavior for temporary sidebar
-   */
-  private setupTemporarySidebarClose(drawer: any, mainElement?: HTMLElement, wasCollapsed?: boolean) {
-    // Remove any existing temporary close handler
-    if (this.tempSidebarCloseHandler) {
-      document.removeEventListener('click', this.tempSidebarCloseHandler);
-    }
-
-    // Create a new temporary close handler
-    this.tempSidebarCloseHandler = (event: Event) => {
-      const target = event.target as HTMLElement;
-
-      // Don't close if clicking on the sidebar button itself
-      if (target.closest('.apple-header-sidebar-button')) {
-        return;
-      }
-
-      // Don't close if clicking inside the drawer
-      if (target.closest('ha-drawer')) {
-        return;
-      }
-
-      // Close the drawer
-      if (typeof drawer.close === 'function') {
-        drawer.close();
-      } else if (typeof drawer.toggle === 'function' && drawer.opened) {
-        drawer.toggle();
-      }
-
-      // Restore collapsed state if it was previously collapsed
-      if (wasCollapsed && mainElement) {
-        mainElement.setAttribute('collapsed', '');
-        mainElement.style.setProperty('--mdc-drawer-width', '0px');
-        mainElement.style.setProperty('--app-drawer-width', '0px');
-
-        // Clean up transitions after animation completes
-        setTimeout(() => {
-          mainElement.style.removeProperty('transition');
-          if (drawer) {
-            drawer.style.removeProperty('transition');
-          }
-        }, 300);
-      }
-
-      // Remove this temporary handler
-      document.removeEventListener('click', this.tempSidebarCloseHandler!);
-      this.tempSidebarCloseHandler = undefined;
-    };
-
-    // Add the handler after a small delay to prevent immediate closing
-    setTimeout(() => {
-      document.addEventListener('click', this.tempSidebarCloseHandler!);
-    }, 100);
   }
 
   /**
@@ -1625,10 +1269,12 @@ export class HomeHeader {
     // Inject centralized liquid glass button styles (for non-shadow DOM contexts)
     injectLiquidGlassStyles();
 
-    if (document.querySelector('#apple-header-styles')) return;
+    const rootNode = this.container?.getRootNode();
+    const styleRoot: ParentNode = rootNode instanceof ShadowRoot ? rootNode : document;
+    if (styleRoot.querySelector('#hg-header-styles')) return;
 
     const style = document.createElement('style');
-    style.id = 'apple-header-styles';
+    style.id = 'hg-header-styles';
     style.textContent = `
       /* Include liquid glass styles for shadow DOM context */
       ${liquidGlassCSS}
@@ -2270,24 +1916,6 @@ export class HomeHeader {
         }
       }
 
-      /* Sidebar overlay styles for mobile behavior */
-      .apple-sidebar-backdrop {
-        position: fixed !important;
-        top: 0 !important;
-        left: 256px !important;
-        width: calc(100vw - 256px) !important;
-        height: 100vh !important;
-        background: transparent !important;
-        z-index: 99 !important;
-        pointer-events: all !important;
-      }
-
-      /* RTL sidebar backdrop positioning */
-      [dir="rtl"] .apple-sidebar-backdrop {
-        left: auto !important;
-        right: 256px !important;
-      }
-
       /* Smooth sidebar animations */
       ha-drawer {
         transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) !important;
@@ -2327,16 +1955,6 @@ export class HomeHeader {
           right: 0 !important;
         }
 
-        .apple-sidebar-backdrop {
-          left: 256px !important;
-          width: calc(100vw - 256px) !important;
-        }
-
-        [dir="rtl"] .apple-sidebar-backdrop {
-          left: auto !important;
-          right: 256px !important;
-        }
-
         [dir="rtl"] home-assistant-main {
           margin-left: 0 !important;
           margin-right: 0 !important;
@@ -2344,8 +1962,7 @@ export class HomeHeader {
       }
     `;
 
-    const rootNode = this.container?.getRootNode();
-    if (rootNode && rootNode instanceof ShadowRoot) {
+    if (rootNode instanceof ShadowRoot) {
       rootNode.appendChild(style);
     } else {
       document.head.appendChild(style);
@@ -2381,12 +1998,6 @@ export class HomeHeader {
       this.escapeKeyListener = undefined;
     }
 
-    // Clean up temporary sidebar close handler
-    if (this.tempSidebarCloseHandler) {
-      document.removeEventListener('click', this.tempSidebarCloseHandler);
-      this.tempSidebarCloseHandler = undefined;
-    }
-
     // Remove existing elements
     this.container?.querySelector('.hg-header')?.remove();
     this.container?.querySelector('.apple-static-title')?.remove();
@@ -2405,16 +2016,11 @@ export class HomeHeader {
   }
 
   // Public API
-  private lastSetHassTime = 0;
-  private setHassCallCount = 0;
   private setHassTimeout: NodeJS.Timeout | null = null;
   private pendingHass: any = null;
 
   setHass(hass: any) {
-    const now = Date.now();
-    this.setHassCallCount++;
-
-    // Store the latest hass object
+    this._hass = hass;
     this.pendingHass = hass;
 
     // If we have a pending timeout, clear it
@@ -2430,8 +2036,6 @@ export class HomeHeader {
   }
 
   private processSetHass(hass: any) {
-    this._hass = hass;
-
     // Initialize RTL detection with Home Assistant data
     RTLHelper.initialize(hass);
 
@@ -2450,22 +2054,6 @@ export class HomeHeader {
     this.customizationManager = customizationManager;
   }
 
-  resetEditMode() {
-    if (this.editMode && this.editModeManager) {
-      // Exit edit mode through EditModeManager
-      this.editModeManager.toggleEditMode();
-
-      // Update UI to reflect exit from edit mode
-      if (this.menuButton) {
-        this.menuButton.innerHTML = this.getMenuButtonContent();
-        this.menuButton.classList.remove('edit-mode');
-      }
-
-      // Update dropdown UI
-      this.dropdown?.querySelector('.edit-item')?.classList.remove('active');
-    }
-  }
-
   addRefreshCallback(callback: () => void) {
     this.onRefreshCallbacks.push(callback);
   }
@@ -2477,21 +2065,14 @@ export class HomeHeader {
     }
   }
 
-  /**
-   * Force update of header positioning (useful when DOM changes)
-   */
-  updateHeaderPosition() {
-    if (this.currentConfig.isGroupPage) {
-      this.updateFixedHeaderPosition();
-    }
-  }
-
   destroy() {
-    this.cleanup();
-
-    const style = document.querySelector('#apple-header-styles');
-    if (style) {
-      style.remove();
+    if (this.setHassTimeout) {
+      clearTimeout(this.setHassTimeout);
+      this.setHassTimeout = null;
     }
+    const rootNode = this.container?.getRootNode();
+    const styleRoot: ParentNode = rootNode instanceof ShadowRoot ? rootNode : document;
+    this.cleanup();
+    styleRoot.querySelector('#hg-header-styles')?.remove();
   }
 }

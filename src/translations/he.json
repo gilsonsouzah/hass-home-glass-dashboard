@@ -53,7 +53,9 @@
     "none": "ללא",
     "press": "לחץ",
     "heat_to": "חימום ל",
-    "cool_to": "קירור ל"
+    "cool_to": "קירור ל",
+    "detected": "זוהה",
+    "current": "נוכחי"
   },
   "units": {
     "percent": "%",
@@ -281,7 +283,8 @@
     "show_cost": "הצג עלות",
     "show_cost_description": "הצג נתוני עלות בלוח האנרגיה כאשר זמינים",
     "show_gas": "הצג גז",
-    "show_gas_description": "הצג צריכת גז במסך הבית ובלוח האנרגיה כאשר מוגדר"
+    "show_gas_description": "הצג צריכת גז במסך הבית ובלוח האנרגיה כאשר מוגדר",
+    "no_entities_found": "לא נמצאו ישויות"
   },
   "status_messages": {
     "unavailable": "לא זמין",

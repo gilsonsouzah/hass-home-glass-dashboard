@@ -54,7 +54,8 @@
     "disarming": "Disarming",
     "none": "None",
     "press": "Press",
-    "current": "Current"
+    "current": "Current",
+    "detected": "Detected"
   },
   "units": {
     "percent": "%",
@@ -279,7 +280,8 @@
     "show_cost": "Show Cost",
     "show_cost_description": "Show cost figures on the energy dashboard when available",
     "show_gas": "Show Gas",
-    "show_gas_description": "Show gas consumption on the home screen and energy dashboard when configured"
+    "show_gas_description": "Show gas consumption on the home screen and energy dashboard when configured",
+    "no_entities_found": "No entities found"
   },
   "status_messages": {
     "unavailable": "Unavailable",

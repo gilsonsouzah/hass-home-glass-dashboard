@@ -1,6 +1,7 @@
 import { CustomizationManager } from './CustomizationManager';
 import { DashboardConfig } from '../config/DashboardConfig';
 import { localize } from './LocalizationService';
+import { escapeHtml } from './html';
 import { BackgroundManager } from './BackgroundManager';
 import { HomeAssistantUIManager } from './HomeAssistantUIManager';
 import { injectLiquidGlassStyles, LiquidGlassClasses } from './LiquidGlassStyles';
@@ -25,6 +26,7 @@ export interface HomeSettingsData {
 
 export class HomeSettingsManager {
   private modal?: HTMLElement;
+  private listenersAbort?: AbortController;
   private customizationManager: CustomizationManager;
   private onSaveCallback: () => void;
   private hass: any;
@@ -150,8 +152,7 @@ export class HomeSettingsManager {
         friendly_name: state.attributes.friendly_name || state.entity_id,
         domain: state.entity_id.split('.')[0],
         state: state.state,
-        attributes: state.attributes,
-        area_id: state.attributes.area_id || null
+        attributes: state.attributes
       }))
       .sort((a, b) => a.friendly_name.localeCompare(b.friendly_name));
 
@@ -201,14 +202,13 @@ export class HomeSettingsManager {
         friendly_name: state.attributes.friendly_name || state.entity_id,
         domain: state.entity_id.split('.')[0],
         state: state.state,
-        attributes: state.attributes,
-        area_id: state.attributes.area_id || null
+        attributes: state.attributes
       }))
       .sort((a, b) => a.friendly_name.localeCompare(b.friendly_name));
   }
 
   private formatPresetName(presetName: string): string {
-    return localize(`wallpaper_presets.${presetName}`) || (presetName.charAt(0).toUpperCase() + presetName.slice(1));
+    return localize(`wallpaper_presets.${presetName}`, presetName.charAt(0).toUpperCase() + presetName.slice(1));
   }
 
   private createModal() {
@@ -439,8 +439,8 @@ export class HomeSettingsManager {
       if (!entity) return '';
       
       return `
-        <div class="selected-entity-chip" data-entity-id="${entityId}">
-          <span class="entity-name">${entity.friendly_name}</span>
+        <div class="selected-entity-chip" data-entity-id="${escapeHtml(entityId)}">
+          <span class="entity-name">${escapeHtml(entity.friendly_name)}</span>
           <ha-icon icon="mdi:close" class="remove-entity"></ha-icon>
         </div>
       `;
@@ -457,16 +457,16 @@ export class HomeSettingsManager {
       if (!entity) {
         // Entity might be saved but no longer exists - show entity_id
         return `
-          <div class="selected-entity-chip" data-entity-id="${entityId}">
-            <span class="entity-name">${entityId}</span>
+          <div class="selected-entity-chip" data-entity-id="${escapeHtml(entityId)}">
+            <span class="entity-name">${escapeHtml(entityId)}</span>
             <ha-icon icon="mdi:close" class="remove-entity"></ha-icon>
           </div>
         `;
       }
       
       return `
-        <div class="selected-entity-chip" data-entity-id="${entityId}">
-          <span class="entity-name">${entity.friendly_name}</span>
+        <div class="selected-entity-chip" data-entity-id="${escapeHtml(entityId)}">
+          <span class="entity-name">${escapeHtml(entity.friendly_name)}</span>
           <ha-icon icon="mdi:close" class="remove-entity"></ha-icon>
         </div>
       `;
@@ -478,8 +478,8 @@ export class HomeSettingsManager {
     const state = this.hass?.states?.[entityId];
     const friendlyName = state?.attributes?.friendly_name || entityId;
     return `
-      <div class="selected-entity-chip" data-entity-id="${entityId}">
-        <span class="entity-name">${friendlyName}</span>
+      <div class="selected-entity-chip" data-entity-id="${escapeHtml(entityId)}">
+        <span class="entity-name">${escapeHtml(friendlyName)}</span>
         <ha-icon icon="mdi:close" class="remove-entity"></ha-icon>
       </div>
     `;
@@ -968,6 +968,7 @@ export class HomeSettingsManager {
 
   private setupEventListeners() {
     if (!this.modal) return;
+    this.listenersAbort = new AbortController();
 
     // Cancel button
     const cancelBtn = this.modal.querySelector('.modal-cancel');
@@ -988,7 +989,7 @@ export class HomeSettingsManager {
     this.setupRemoveButtons();
 
     // Escape key
-    document.addEventListener('keydown', this.handleEscapeKey);
+    document.addEventListener('keydown', this.handleEscapeKey, { signal: this.listenersAbort.signal });
 
     // Setup background settings
     this.setupBackgroundEventListeners();
@@ -1018,7 +1019,7 @@ export class HomeSettingsManager {
         if (!selector.contains(e.target as Node)) {
           results.classList.remove('show');
         }
-      });
+      }, { signal: this.listenersAbort?.signal });
 
       // With absolute positioning, we don't need scroll repositioning
       // but we might want to resize on window resize
@@ -1028,12 +1029,7 @@ export class HomeSettingsManager {
         }
       };
       
-      window.addEventListener('resize', resizeHandler);
-      
-      // Store cleanup function for later
-      (results as any)._cleanup = () => {
-        window.removeEventListener('resize', resizeHandler);
-      };
+      window.addEventListener('resize', resizeHandler, { signal: this.listenersAbort?.signal });
     });
   }
 
@@ -1128,7 +1124,7 @@ export class HomeSettingsManager {
     }).slice(0, 10); // Limit to 10 results
 
     if (filteredEntities.length === 0 && query !== '') {
-      resultsContainer.innerHTML = '<div class="autocomplete-result"><div class="autocomplete-result-name">No entities found</div></div>';
+      resultsContainer.innerHTML = `<div class="autocomplete-result"><div class="autocomplete-result-name">${escapeHtml(localize('settings.no_entities_found'))}</div></div>`;
       this.positionAutocompleteResults(resultsContainer);
       resultsContainer.classList.add('show');
       return;
@@ -1140,9 +1136,9 @@ export class HomeSettingsManager {
     }
 
     resultsContainer.innerHTML = filteredEntities.map(entity => `
-      <div class="autocomplete-result" data-entity-id="${entity.entity_id}">
-        <div class="autocomplete-result-name">${entity.friendly_name}</div>
-        <div class="autocomplete-result-id">${entity.entity_id}</div>
+      <div class="autocomplete-result" data-entity-id="${escapeHtml(entity.entity_id)}">
+        <div class="autocomplete-result-name">${escapeHtml(entity.friendly_name)}</div>
+        <div class="autocomplete-result-id">${escapeHtml(entity.entity_id)}</div>
       </div>
     `).join('');
 
@@ -1274,25 +1270,17 @@ export class HomeSettingsManager {
   private closeModal() {
     if (!this.modal) return;
 
-    // Cleanup autocomplete event listeners
-    this.modal.querySelectorAll('.autocomplete-results').forEach(results => {
-      if ((results as any)._cleanup) {
-        (results as any)._cleanup();
-      }
-    });
-
-    // Restore background scrolling
     document.body.style.overflow = '';
-
     this.modal.classList.remove('show');
-    
-    setTimeout(() => {
-      document.removeEventListener('keydown', this.handleEscapeKey);
-      if (this.modal && this.modal.parentNode) {
-        this.modal.parentNode.removeChild(this.modal);
-      }
-      this.modal = undefined;
-    }, 300);
+    setTimeout(() => this.teardownModal(), 300);
+  }
+
+  private teardownModal() {
+    this.listenersAbort?.abort();
+    this.listenersAbort = undefined;
+    document.body.style.overflow = '';
+    this.modal?.remove();
+    this.modal = undefined;
   }
 
   private async saveAndClose() {
@@ -1349,16 +1337,8 @@ export class HomeSettingsManager {
     
     // Clean up modal after fade animation
     setTimeout(() => {
-      // Restore background scrolling
-      document.body.style.overflow = '';
-      
-      // Remove modal from DOM
-      document.removeEventListener('keydown', this.handleEscapeKey);
-      if (this.modal && this.modal.parentNode) {
-        this.modal.parentNode.removeChild(this.modal);
-      }
-      this.modal = undefined;
-      
+      this.teardownModal();
+
       // Trigger callback if re-render is needed
       if (this.onSaveCallback && this.requiresRender) {
         this.onSaveCallback();
@@ -1447,6 +1427,7 @@ export class HomeSettingsManager {
         if (file) {
           await this.handleBackgroundFileUpload(file);
         }
+        target.value = '';
       });
     }
 
@@ -1536,9 +1517,6 @@ export class HomeSettingsManager {
       } else {
       previewElement.style.setProperty('background', backgroundStyle);
       }
-    
-    // Also check computed styles
-    const computedStyles = window.getComputedStyle(previewElement);
     }
 
   private updateUIToggle(toggleId: string, isActive: boolean) {
@@ -1809,19 +1787,13 @@ export class HomeSettingsManager {
       customBackground: this.tempSettings.customBackground
     };
 
-    // Cancel button (X)
-    const cancelBtn = presetsModal.querySelector('.modal-cancel');
-    cancelBtn?.addEventListener('click', () => {
-      // Revert temp settings to original state
-      this.tempSettings.backgroundType = originalSettings.backgroundType;
-      this.tempSettings.presetBackground = originalSettings.presetBackground;
-      this.tempSettings.customBackground = originalSettings.customBackground;
-      
-      // Update the main modal preview to show reverted state
+    const revert = () => {
+      Object.assign(this.tempSettings, originalSettings);
       this.updateCurrentWallpaperPreview();
-      
       this.closePresetsModal(presetsModal);
-    });
+    };
+
+    presetsModal.querySelector('.modal-cancel')?.addEventListener('click', revert);
 
     // Done button (checkmark) - save and close
     const doneBtn = presetsModal.querySelector('.modal-done');
@@ -1831,19 +1803,7 @@ export class HomeSettingsManager {
       this.closePresetsModal(presetsModal);
     });
 
-    // Backdrop click (treat as cancel)
-    const backdrop = presetsModal.querySelector('.modal-backdrop');
-    backdrop?.addEventListener('click', () => {
-      // Revert temp settings to original state
-      this.tempSettings.backgroundType = originalSettings.backgroundType;
-      this.tempSettings.presetBackground = originalSettings.presetBackground;
-      this.tempSettings.customBackground = originalSettings.customBackground;
-      
-      // Update the main modal preview to show reverted state
-      this.updateCurrentWallpaperPreview();
-      
-      this.closePresetsModal(presetsModal);
-    });
+    presetsModal.querySelector('.modal-backdrop')?.addEventListener('click', revert);
 
     // Preset selection - select but don't close (user clicks checkmark to confirm)
     const presetOptions = presetsModal.querySelectorAll('.preset-option');
@@ -1912,9 +1872,13 @@ export class HomeSettingsManager {
   }
 
   private handleEscapeKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      this.closeModal();
+    if (e.key !== 'Escape') return;
+    const presetsCancel = document.querySelector('.presets-selection-modal .modal-cancel');
+    if (presetsCancel) {
+      presetsCancel.dispatchEvent(new MouseEvent('click'));
+      return;
     }
+    this.closeModal();
   };
 
   public destroy() {

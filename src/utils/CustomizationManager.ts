@@ -1,5 +1,3 @@
-import { DashboardConfig } from '../config/DashboardConfig';
-import { localize } from './LocalizationService';
 import { DashboardStateManager } from './DashboardStateManager';
 
 export class CustomizationManager {
@@ -16,6 +14,8 @@ export class CustomizationManager {
   // every drag-and-drop drop would kick the user out of edit mode each time.
   private deferSaves = false;
   private hasPendingSave = false;
+  // Lovelace url_path captured on load/set so a deferred save flushed after navigation still targets the dashboard it came from. undefined = not captured yet; null = default dashboard.
+  private storageKey: string | null | undefined = undefined;
 
   constructor(hass?: any) {
     this._hass = hass;
@@ -60,6 +60,7 @@ export class CustomizationManager {
   }
 
   async setCustomizations(customizations: any) {
+    this.storageKey = await this.getCurrentDashboardKey(this._hass);
     const migratedCustomizations = this.migrateToNewStructure(customizations || {});
     this.customizations = JSON.parse(JSON.stringify(migratedCustomizations));
     this.isLoaded = true;
@@ -173,10 +174,6 @@ export class CustomizationManager {
     this._hass = hass;
   }
 
-  async saveCardOrder(areaId: string, entityOrder: string[], domain?: string) {
-    await this.saveCardOrderWithContext(areaId, entityOrder, 'home', domain);
-  }
-
   async saveCardOrderWithContext(areaId: string, entityOrder: string[], context: string = 'home', domain?: string) {
     if (context === 'home') {
       // Save to home.entities_order
@@ -219,10 +216,6 @@ export class CustomizationManager {
       }
       await this.setCustomization('pages', pagesData);
     }
-  }
-
-  getSavedCardOrder(areaId: string, domain?: string): string[] {
-    return this.getSavedCardOrderWithContext(areaId, 'home', domain);
   }
 
   getSavedCardOrderWithContext(areaId: string, context: string = 'home', domain?: string): string[] {
@@ -324,8 +317,7 @@ export class CustomizationManager {
       const success = await this.saveCustomizationsToStorage(this._hass, this.customizations);
       
       if (!success) {
-        console.error('Home Glass: Failed to save customizations - check Home Assistant setup');
-        console.error('Home Glass: Please create an input_text helper named "apple_home_dashboard_config" for persistent storage');
+        console.error('Home Glass: Failed to save customizations - saving requires an admin user and a storage-mode dashboard');
       }
       // Removed global refresh - individual components should handle their own updates
     } catch (error) {
@@ -360,8 +352,8 @@ export class CustomizationManager {
     }
     
     try {
-      // Try to get the current dashboard key dynamically
       const dashboardKey = await this.getCurrentDashboardKey(this._hass);
+      this.storageKey = dashboardKey;
       
       // Load from lovelace config
       const lovelaceResult = await this._hass.callWS({
@@ -383,8 +375,7 @@ export class CustomizationManager {
 
   private async saveCustomizationsToStorage(hass: any, customizations: any): Promise<boolean> {
     try {
-      // Try to get the current dashboard key dynamically
-      const dashboardKey = await this.getCurrentDashboardKey(hass);
+      const dashboardKey = this.storageKey !== undefined ? this.storageKey : await this.getCurrentDashboardKey(hass);
       
       // Get current dashboard config
       const currentConfig = await hass.callWS({
@@ -494,33 +485,6 @@ export class CustomizationManager {
     }
   }
 
-  /**
-   * Get dashboard key for component isolation (different from storage key)
-   * This ensures each dashboard has its own component instances
-   */
-  getComponentDashboardKey(): string {
-    const currentPath = window.location.pathname;
-    const dashboardMatch = currentPath.match(/\/([^\/]+)/);
-    
-    if (dashboardMatch && dashboardMatch[1]) {
-      return dashboardMatch[1]; // Always return the actual path segment (including 'lovelace')
-    }
-    
-    return 'default';
-  }
-
-  async saveCurrentLayout() {
-    if (!this._hass) return;
-    
-    try {
-      // Save the current layout to Home Assistant storage
-      await this.saveCustomizationsToStorage(this._hass, this.customizations);
-    } catch (error) {
-      console.error('Error saving layout:', error);
-      return { success: false, message: localize('errors.error_saving_layout') };
-    }
-  }
-
   async saveLayoutToStorage(hass: any) {
     try {
       // Save the current layout to Home Assistant storage
@@ -529,10 +493,6 @@ export class CustomizationManager {
       console.error('Error saving layout to storage:', error);
       throw error;
     }
-  }
-
-  async updateCarouselOrder(areaId: string, sectionType: string, entityOrder: string[]) {
-    await this.updateCarouselOrderWithContext(areaId, sectionType, entityOrder, 'home');
   }
 
   async updateCarouselOrderWithContext(areaId: string, sectionType: string, entityOrder: string[], context: string = 'home') {
@@ -574,10 +534,6 @@ export class CustomizationManager {
     }
   }
 
-  getSavedCarouselOrder(areaId: string, sectionType: string): string[] {
-    return this.getSavedCarouselOrderWithContext(areaId, sectionType, 'home');
-  }
-
   getSavedCarouselOrderWithContext(areaId: string, sectionType: string, context: string = 'home'): string[] {
     if (context === 'home') {
       // Get from home.entities_order
@@ -599,38 +555,14 @@ export class CustomizationManager {
     }
   }
 
-  // Section reordering methods
-  async saveSectionOrder(sectionOrder: string[]) {
-    const homeData = this.getCustomization('home');
-    if (!homeData.sections) {
-      homeData.sections = {};
-    }
-    homeData.sections.order = sectionOrder;
-    await this.setCustomization('home', homeData);
-  }
-
   getSavedSectionOrder(): string[] {
     const homeData = this.getCustomization('home');
     return homeData.sections?.order || [];
   }
 
-  async saveHiddenSections(hiddenSections: string[]) {
-    const homeData = this.getCustomization('home');
-    if (!homeData.sections) {
-      homeData.sections = {};
-    }
-    homeData.sections.hidden = hiddenSections;
-    await this.setCustomization('home', homeData);
-  }
-
   getHiddenSections(): string[] {
     const homeData = this.getCustomization('home');
     return homeData.sections?.hidden || [];
-  }
-
-  isSectionVisible(sectionId: string): boolean {
-    const hiddenSections = this.getHiddenSections();
-    return !hiddenSections.includes(sectionId);
   }
 
   // Chips ordering methods
@@ -666,11 +598,6 @@ export class CustomizationManager {
 
   async isEntityExcludedFromDashboard(entityId: string): Promise<boolean> {
     const excluded = await this.getExcludedFromDashboard();
-    return excluded.includes(entityId);
-  }
-
-  async isEntityExcludedFromHome(entityId: string): Promise<boolean> {
-    const excluded = await this.getExcludedFromHome();
     return excluded.includes(entityId);
   }
 
@@ -736,22 +663,6 @@ export class CustomizationManager {
     const path = window.location.pathname;
     const match = path.match(/^\/([^\/]+)/);
     return match ? match[1] : null;
-  }
-
-  isDashboardCurrentlyActive(): boolean {
-    return DashboardStateManager.getInstance().isDashboardActive();
-  }
-
-  getDashboardUrl(): string | null {
-    // Return current path if we have a dashboard key
-    return this.currentDashboardKey ? window.location.pathname : null;
-  }
-
-  // Check if current URL matches dashboard URL pattern
-  // This now delegates to DashboardStateManager for consistency
-  isCurrentlyInDashboard(): boolean {
-    // Synchronous check - use the tracked dashboard key
-    return this.currentDashboardKey !== null;
   }
 
   // UI Settings management
@@ -828,24 +739,6 @@ export class CustomizationManager {
     
     // Single save operation for all changes
     await this.saveCustomizations();
-  }
-
-  /**
-   * Update a customization section in memory without saving.
-   * Use with saveCustomizations() for batch operations.
-   */
-  setCustomizationLocal(section: string, newSectionObject: any): void {
-    this.customizations = {
-      ...this.customizations,
-      [section]: newSectionObject
-    };
-  }
-
-  // Convenience method for updating a single property within a section
-  async updateCustomizationProperty(section: string, property: string, value: any): Promise<void> {
-    const sectionData = this.getCustomization(section);
-    sectionData[property] = value;
-    await this.setCustomization(section, sectionData);
   }
 
   /**

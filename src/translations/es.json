@@ -54,7 +54,8 @@
     "error": "Error",
     "heat_to": "Calentar a",
     "cool_to": "Enfriar a",
-    "none": "Ninguno"
+    "detected": "Detectado",
+    "current": "Actual"
   },
   "units": {
     "percent": "%",
@@ -282,7 +283,8 @@
     "show_cost": "Mostrar Costo",
     "show_cost_description": "Muestra las cifras de costo en el panel de energía cuando estén disponibles",
     "show_gas": "Mostrar Gas",
-    "show_gas_description": "Muestra el consumo de gas en la pantalla principal y el panel de energía cuando esté configurado"
+    "show_gas_description": "Muestra el consumo de gas en la pantalla principal y el panel de energía cuando esté configurado",
+    "no_entities_found": "No se encontraron entidades"
   },
   "status_messages": {
     "unavailable": "No disponible",
