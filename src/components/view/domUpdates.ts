@@ -2,19 +2,23 @@ import { localize } from '../../utils/LocalizationService';
 import { isEntityHiddenOrDisabled, resolveEntityAreaId } from '../../utils/registryDisplay';
 import type { RegistryChangeEvent } from '../../utils/RegistrySubscriptionManager';
 
+const FADE_MS = 250;
+const FADE_TRANSITION = 'opacity var(--hg-dur) var(--hg-ease-standard)';
+const FADE_SCALE_TRANSITION = `${FADE_TRANSITION}, transform var(--hg-dur) var(--hg-ease-standard)`;
+
 export function fadeOutWrapper(wrapper: HTMLElement): void {
   const parentGrid = wrapper.closest('.area-entities') as HTMLElement;
 
   const card = wrapper.querySelector('home-glass-card') as any;
   if (card && typeof card.cleanup === 'function') card.cleanup();
 
-  wrapper.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+  wrapper.style.transition = FADE_SCALE_TRANSITION;
   wrapper.style.opacity = '0';
   wrapper.style.transform = 'scale(0.8)';
   setTimeout(() => {
     wrapper.remove();
     if (parentGrid) cleanupEmptySection(parentGrid);
-  }, 250);
+  }, FADE_MS);
 }
 
 export function fadeOutCard(content: HTMLElement, entityId: string): void {
@@ -25,16 +29,16 @@ export function fadeOutCard(content: HTMLElement, entityId: string): void {
 function cleanupEmptySection(grid: HTMLElement): void {
   if (!grid || grid.children.length > 0) return;
   const title = grid.previousElementSibling as HTMLElement;
-  grid.style.transition = 'opacity 0.2s ease';
+  grid.style.transition = FADE_TRANSITION;
   grid.style.opacity = '0';
   if (title?.classList.contains('area-title')) {
-    title.style.transition = 'opacity 0.2s ease';
+    title.style.transition = FADE_TRANSITION;
     title.style.opacity = '0';
   }
   setTimeout(() => {
     grid.remove();
     if (title?.classList.contains('area-title')) title.remove();
-  }, 200);
+  }, FADE_MS);
 }
 
 export async function handleEntityChange(content: HTMLElement, hass: any, event: RegistryChangeEvent): Promise<void> {
@@ -62,9 +66,9 @@ export async function handleEntityChange(content: HTMLElement, hass: any, event:
       if (currentAreaId && currentAreaId !== newAreaId) {
         const targetGrid = content.querySelector(`.area-entities[data-area-id="${newAreaId}"]`) as HTMLElement;
         if (targetGrid) {
-          wrapper.style.transition = 'opacity 0.2s ease';
+          wrapper.style.transition = FADE_TRANSITION;
           wrapper.style.opacity = '0';
-          await new Promise(r => setTimeout(r, 200));
+          await new Promise(r => setTimeout(r, FADE_MS));
           targetGrid.appendChild(wrapper);
           wrapper.style.opacity = '1';
         } else {
@@ -84,13 +88,13 @@ export async function handleAreaChange(content: HTMLElement, hass: any, event: R
     const grid = content.querySelector(`.area-entities[data-area-id="${areaId}"]`) as HTMLElement;
     if (grid) {
       const title = grid.previousElementSibling as HTMLElement;
-      grid.style.transition = 'opacity 0.2s ease';
+      grid.style.transition = FADE_TRANSITION;
       grid.style.opacity = '0';
       if (title?.classList.contains('area-title')) {
-        title.style.transition = 'opacity 0.2s ease';
+        title.style.transition = FADE_TRANSITION;
         title.style.opacity = '0';
       }
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, FADE_MS));
       grid.remove();
       if (title?.classList.contains('area-title')) title.remove();
     }
@@ -139,7 +143,7 @@ function appendCardWithFadeIn(grid: HTMLElement, hass: any, entityId: string, st
   grid.appendChild(wrapper);
 
   requestAnimationFrame(() => {
-    wrapper.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+    wrapper.style.transition = FADE_SCALE_TRANSITION;
     wrapper.style.opacity = '1';
     wrapper.style.transform = 'scale(1)';
   });
