@@ -3,9 +3,12 @@ import { localize } from '../utils/LocalizationService';
 import {
   ACTIVE_BASE_STYLE,
   CLIMATE_MODE_COLORS,
+  GENERIC_ACTIVE_ICON_BG,
+  GLYPH_ON_COLOR,
   GROUP_STYLES,
   GroupStyle,
   INACTIVE_STYLE,
+  UNAVAILABLE_STYLE,
   WATER_HEATER_MODE_COLORS,
 } from './colors';
 import { DEFAULT_BACKGROUND } from './defaultBackground';
@@ -87,7 +90,7 @@ export class DashboardConfig {
   private static applyGroupStyling(group: DeviceGroup): Partial<EntityData> {
     const groupStyle = this.getGroupStyle(group);
 
-    const iconColor = groupStyle.activeIconColor || '#ffffff';
+    const iconColor = groupStyle.activeIconColor || GLYPH_ON_COLOR;
 
     return {
       ...ACTIVE_BASE_STYLE,
@@ -108,7 +111,7 @@ export class DashboardConfig {
   }
 
   private static applyClimateStyling(entityState: string, isActive: boolean): Partial<EntityData> {
-    // Use known mode color, or fall back to heat orange for active / white for off
+    // Use known mode color, or fall back to heat orange for active / label color for off
     const climateColor =
       (CLIMATE_MODE_COLORS as Record<string, string>)[entityState] ||
       (isActive ? CLIMATE_MODE_COLORS.heat : CLIMATE_MODE_COLORS.off);
@@ -146,6 +149,10 @@ export class DashboardConfig {
     }
   }
 
+  static isUnavailable(state: EntityState): boolean {
+    return ['unavailable', 'unknown', 'none', 'null', ''].includes(state.state.toLowerCase());
+  }
+
   static getEntityData(
     state: EntityState,
     domain: string,
@@ -156,15 +163,13 @@ export class DashboardConfig {
     const entityState = state.state;
     const attributes = state.attributes;
 
-    const isUnavailableState = ['unavailable', 'unknown', 'none', 'null', ''].includes(entityState.toLowerCase());
-
-    if (isUnavailableState) {
+    if (this.isUnavailable(state)) {
       return {
         isActive: false,
-        backgroundColor: INACTIVE_STYLE.backgroundColor,
-        iconColor: '#ffffff', // White icon for unavailable entities
-        iconBackgroundColor: INACTIVE_STYLE.iconBackgroundColor,
-        textColor: INACTIVE_STYLE.textColor,
+        backgroundColor: UNAVAILABLE_STYLE.backgroundColor,
+        iconColor: UNAVAILABLE_STYLE.iconColor,
+        iconBackgroundColor: UNAVAILABLE_STYLE.iconBackgroundColor,
+        textColor: UNAVAILABLE_STYLE.textColor,
         stateText: getUnavailableStateText(entityState),
         icon: attributes.icon || getFallbackIcon(domain, entityState, attributes, state.entity_id),
       };
@@ -194,7 +199,7 @@ export class DashboardConfig {
     if (forceWhiteIcons) {
       styling = {
         ...styling,
-        iconColor: '#ffffff',
+        iconColor: GLYPH_ON_COLOR,
       };
     }
 
@@ -265,8 +270,8 @@ export class DashboardConfig {
     return {
       isActive,
       backgroundColor: isActive ? ACTIVE_BASE_STYLE.backgroundColor : INACTIVE_STYLE.backgroundColor,
-      iconBackgroundColor: isActive ? '#34c759' : INACTIVE_STYLE.iconBackgroundColor,
-      iconColor: isActive ? '#ffffff' : INACTIVE_STYLE.iconColor,
+      iconBackgroundColor: isActive ? GENERIC_ACTIVE_ICON_BG : INACTIVE_STYLE.iconBackgroundColor,
+      iconColor: isActive ? GLYPH_ON_COLOR : INACTIVE_STYLE.iconColor,
       textColor: isActive ? ACTIVE_BASE_STYLE.textColor : INACTIVE_STYLE.textColor,
       stateText,
       icon,
