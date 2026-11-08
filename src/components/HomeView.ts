@@ -72,14 +72,14 @@ export class HomeView extends HTMLElement {
     this.editModeManager = new EditModeManager((editMode) => this.handleEditModeChange(editMode));
     
     // Create instance-specific header (NO SINGLETON!) and pass editModeManager
-    this.appleHeader = new HomeHeader(true);
+    this.appleHeader = new HomeHeader();
     this.appleHeader.setEditModeManager(this.editModeManager);
     this.appleHeader.addRefreshCallback(this.refreshCallback);
     
     this.dragAndDropManager = new DragAndDropManager(
       (areaId: string, grid?: HTMLElement) => this.handleSaveCurrentOrder(areaId, grid),
       this.customizationManager,
-      'home' // Use home context for home page
+      () => this.getPageContext()
     );
     
     // Initialize page renderers
@@ -166,8 +166,8 @@ export class HomeView extends HTMLElement {
       this.dragAndDropManager.disableDragAndDrop(this.content);
     }
     
-    // Clean up all camera managers in the current content
     this.callOnCards('cleanup');
+    this.appleHeader.destroy();
   }
 
   private async handleGlobalRefresh(customizations: any) {
@@ -1833,11 +1833,11 @@ export class HomeView extends HTMLElement {
         // Let the cards finish rendering before wiring up sortables
         setTimeout(() => {
           this.dragAndDropManager.enableDragAndDrop(this.content!);
-          this.setWrappersEditMode(true);
+          EditModeManager.updateEntityWrapperStyles(this.content!, true);
         }, 100);
       } else {
         this.dragAndDropManager.disableDragAndDrop(this.content!);
-        this.setWrappersEditMode(false);
+        EditModeManager.updateEntityWrapperStyles(this.content!, false);
         // Pending order changes are persisted by flushDeferredSaves() above
       }
 
@@ -1845,13 +1845,6 @@ export class HomeView extends HTMLElement {
         this.classList.toggle('edit-mode', editMode);
       }
     }
-  }
-
-  private setWrappersEditMode(editMode: boolean) {
-    this.content!.querySelectorAll('.entity-card-wrapper').forEach((wrapper) => {
-      wrapper.classList.toggle('edit-mode', editMode);
-      (wrapper.querySelector('home-glass-card') as any)?.refreshEditMode?.();
-    });
   }
 
   private setupChipsCallback() {
@@ -2061,7 +2054,7 @@ export class HomeView extends HTMLElement {
     
     
     // Get chips settings from dashboard config - use defaults if not configured
-    const chipsSettings = ChipsConfigurationManager.getSettingsFromConfig(this.config);
+    const chipsSettings = ChipsConfigurationManager.getSettingsFromConfig();
     
     // Set configuration from settings
     this.chipsElement.setConfig(chipsSettings.chips_config);
