@@ -5,7 +5,7 @@ import { Entity, CardConfig, Area } from '../types/types';
 import { DashboardConfig } from '../config/DashboardConfig';
 import { RTLHelper } from '../utils/RTLHelper';
 import { escapeHtml } from '../utils/html';
-import { navigateToDashboardPath } from './navigation';
+import { navigateToDashboardPath, onActivate } from './navigation';
 
 export class AreaSection {
   private customizationManager: CustomizationManager;
@@ -59,10 +59,7 @@ export class AreaSection {
       clickableWrapper.className = 'clickable-section-title';
       clickableWrapper.innerHTML = `<span>${escapeHtml(areaName)}</span><ha-icon icon="${RTLHelper.isRTL() ? 'mdi:chevron-left' : 'mdi:chevron-right'}" class="section-arrow"></ha-icon>`;
 
-      // Add click handler to the wrapper
-      clickableWrapper.addEventListener('click', () => {
-        navigateToDashboardPath(`room-${areaId}`);
-      });
+      onActivate(clickableWrapper, () => navigateToDashboardPath(`room-${areaId}`));
 
       titleDiv.appendChild(clickableWrapper);
     } else {
