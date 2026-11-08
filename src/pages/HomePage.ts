@@ -7,7 +7,8 @@ import { AreaSection } from '../sections/AreaSection';
 import { FavoritesSection } from '../sections/FavoritesSection';
 import { WeatherSection } from '../sections/WeatherSection';
 import { EnergySection } from '../sections/EnergySection';
-import { Entity, Area, HassUpdatable } from '../types/types';
+import { SummarySection } from '../sections/SummarySection';
+import { Entity, Area, Device, HassUpdatable } from '../types/types';
 import { resetPage } from './pageChrome';
 import { isSwitchShown } from './entityFilter';
 import { applyHomeOrdering } from './homeOrdering';
@@ -21,12 +22,14 @@ export class HomePage {
   private favoritesSection?: FavoritesSection;
   private weatherSection?: WeatherSection;
   private energySection?: EnergySection;
+  private summarySection?: SummarySection;
   private _hass?: any;
 
   set hass(hass: any) {
     this._hass = hass;
     (this.weatherSection as HassUpdatable | undefined)?.update?.(hass);
     (this.energySection as HassUpdatable | undefined)?.update?.(hass);
+    this.summarySection?.update(hass);
   }
 
   async setConfig(config: any) {
@@ -47,6 +50,7 @@ export class HomePage {
       this.favoritesSection = new FavoritesSection(this.customizationManager);
       this.weatherSection = new WeatherSection(this.customizationManager);
       this.energySection = new EnergySection(this.customizationManager);
+      this.summarySection = new SummarySection();
     }
   }
 
@@ -110,6 +114,8 @@ export class HomePage {
           }
         }
 
+      this.renderSummary(container, hass, entities, regularEntities, excludedFromDashboard, excludedFromHome, extraAccessories, areas, devices);
+
       // Group regular entities by area
       const entitiesByArea = DataService.groupEntitiesByArea(regularEntities, areas, devices);
 
@@ -134,6 +140,35 @@ export class HomePage {
     } catch (error) {
       console.error('Error rendering home page:', error);
     }
+  }
+
+  /** The Home page renders no binary_sensors, so door/window/leak sensors join the cards' entities, under the same exclusions and area rules. */
+  private renderSummary(
+    container: HTMLElement,
+    hass: any,
+    registryEntities: Entity[],
+    regularEntities: Entity[],
+    excludedFromDashboard: Set<string>,
+    excludedFromHome: Set<string>,
+    extraAccessories: string[],
+    areas: Area[],
+    devices: Device[]
+  ): void {
+    const sensors = registryEntities.filter(
+      (entity) =>
+        entity.entity_id.startsWith('binary_sensor.') &&
+        !excludedFromDashboard.has(entity.entity_id) &&
+        !excludedFromHome.has(entity.entity_id) &&
+        DataService.isDiscoverable(entity, extraAccessories, (d) => DashboardConfig.isStatusDomain(d))
+    );
+    const hiddenSections = new Set(this.customizationManager?.getHiddenSections());
+    const byArea = DataService.groupEntitiesByArea([...regularEntities, ...sensors], areas, devices);
+    const entityIds = Object.entries(byArea)
+      .filter(([areaId]) => !hiddenSections.has(areaId))
+      .flatMap(([, list]) => list)
+      .filter((entity) => DataService.isVisibleInRegistry(hass, entity.entity_id))
+      .map((entity) => entity.entity_id);
+    this.summarySection?.render(container, hass, entityIds);
   }
 
   private async renderSectionsInOrder(
