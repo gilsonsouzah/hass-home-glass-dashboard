@@ -18,6 +18,7 @@ import { BackgroundManager } from './utils/BackgroundManager';
 import { HomeAssistantUIManager } from './utils/HomeAssistantUIManager';
 import { RTLHelper } from './utils/RTLHelper';
 import { injectLiquidGlassStyles } from './utils/LiquidGlassStyles';
+import { syncColorScheme } from './styles/tokens';
 
 // Inject liquid glass styles early at module load time
 injectLiquidGlassStyles();
@@ -50,6 +51,7 @@ async function generateLovelaceDashboard(info: { hass: any; narrow?: boolean }, 
 
   // Initialize localization FIRST before any localize() calls
   setupLocalize(hass);
+  syncColorScheme(hass);
 
   // Initialize RTL support
   RTLHelper.initialize(hass);
