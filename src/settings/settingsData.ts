@@ -10,6 +10,7 @@ export interface HomeSettingsData {
   presetBackground?: string;
   hideHeader?: boolean;
   hideSidebar?: boolean;
+  solidSurfaces?: boolean;
   showSwitches?: boolean;
   showEnergy?: boolean;
   showCost?: boolean;
@@ -26,6 +27,7 @@ export function defaultSettings(defaultPreset: string): HomeSettingsData {
     weatherEntity: undefined,
     backgroundType: 'preset',
     presetBackground: defaultPreset,
+    solidSurfaces: false,
     showSwitches: false,
     showEnergy: false,
     showCost: true,
@@ -64,6 +66,7 @@ export function settingsFromCustomizations(customizations: any, defaultPreset: s
     presetBackground: type === 'preset' ? image : defaultPreset,
     hideHeader: customizations.ui?.hide_header || false,
     hideSidebar: customizations.ui?.hide_sidebar || false,
+    solidSurfaces: customizations.ui?.solid_surfaces === true,
     showSwitches: customizations.home?.show_switches || false,
     showEnergy: customizations.home?.show_energy || false,
     showCost: customizations.home?.show_cost !== false,
@@ -101,7 +104,7 @@ export function settingsToSections(settings: HomeSettingsData, home: any, ui: an
       show_cost: settings.showCost,
       show_gas: settings.showGas,
     },
-    ui: { ...ui, hide_header: settings.hideHeader, hide_sidebar: settings.hideSidebar },
+    ui: { ...ui, hide_header: settings.hideHeader, hide_sidebar: settings.hideSidebar, solid_surfaces: settings.solidSurfaces },
     background: { type: settings.backgroundType, value: backgroundValue(settings) },
   };
 }
