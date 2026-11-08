@@ -339,9 +339,13 @@ export class HomeCard extends HTMLElement {
     }
 
     const media = this.mediaModel(state);
-    if (this.domain === 'media_player' && this.mediaKeyOf(media) !== this.mediaKey) {
-      this.render();
-      return;
+    if (this.domain === 'media_player') {
+      if (this.mediaKeyOf(media) !== this.mediaKey) {
+        this.render();
+        return;
+      }
+      this.applyMediaArtwork(media);
+      this.updateMediaPlayButton(media);
     }
 
     const stateEl = this.shadowRoot.querySelector('.entity-state');
@@ -538,7 +542,7 @@ export class HomeCard extends HTMLElement {
   }
 
   private mediaKeyOf(media: MediaTileModel | null): string {
-    return media ? `${media.artwork}|${media.playing}|${media.canPlayPause}` : '';
+    return media ? `media|${media.canPlayPause}` : '';
   }
 
   private applyMediaArtwork(media: MediaTileModel | null) {
@@ -547,11 +551,20 @@ export class HomeCard extends HTMLElement {
     else this.style.removeProperty('--media-art');
   }
 
+  private mediaPlayLabel(media: MediaTileModel): string {
+    return media.playing ? localize('quick_controls.pause', 'Pause') : localize('quick_controls.play', 'Play');
+  }
+
   private mediaPlayButtonHtml(media: MediaTileModel): string {
-    const label = media.playing
-      ? localize('quick_controls.pause', 'Pause')
-      : localize('quick_controls.play', 'Play');
-    return `<button type="button" class="media-play-btn" aria-label="${escapeHtml(label)}"><ha-icon icon="${media.playing ? 'mdi:pause' : 'mdi:play'}"></ha-icon></button>`;
+    return `<button type="button" class="media-play-btn" aria-label="${escapeHtml(this.mediaPlayLabel(media))}"><ha-icon icon="${media.playing ? 'mdi:pause' : 'mdi:play'}"></ha-icon></button>`;
+  }
+
+  // Updated in place so a focused button keeps focus across play/pause and track changes
+  private updateMediaPlayButton(media: MediaTileModel | null) {
+    const button = this.shadowRoot?.querySelector('.media-play-btn');
+    if (!button || !media) return;
+    button.setAttribute('aria-label', this.mediaPlayLabel(media));
+    button.querySelector('ha-icon')?.setAttribute('icon', media.playing ? 'mdi:pause' : 'mdi:play');
   }
 
   private openQuickControls() {
