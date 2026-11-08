@@ -24,6 +24,8 @@ test('stepTemperature clamps, honors 0 bounds and rounds to step precision', () 
   assert.equal(stepTemperature(1, -1, 1, 0, 35), 0);
   assert.equal(stepTemperature(8, -1, 0.5, undefined, undefined), 7.5);
   assert.equal(stepTemperature(20, 1, null, null, null), 21);
+  assert.equal(stepTemperature(22.5, 1, undefined, 7, 35), 23.5);
+  assert.equal(stepTemperature(22.5, -1, undefined, 7, 35), 21.5);
 });
 
 test('parseCodeFormat derives keypad/text and fixed length', () => {

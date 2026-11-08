@@ -9,10 +9,12 @@ export function pickHvacOnMode(lastMode: string | undefined, hvacModes: unknown)
   return modes.find((m) => m !== 'off') ?? null;
 }
 
-/** Next target temperature, clamped and rounded to the precision of `step` (avoids 22.200000000000003). */
+const decimalsOf = (n: number) => (String(n).split('.')[1] ?? '').length;
+
+/** Next target temperature: current + delta*step, clamped, rounded to the finer precision of `step` and `current` (avoids 22.200000000000003 without snapping 22.5 to a whole number). */
 export function stepTemperature(current: number, delta: number, step: unknown, min: unknown, max: unknown): number {
   const stepValue = asNumber(step) || 1;
-  const decimals = (String(stepValue).split('.')[1] ?? '').length;
+  const decimals = Math.max(decimalsOf(stepValue), decimalsOf(current));
   const next = current + delta * stepValue;
   const clamped = Math.min(asNumber(max) ?? 35, Math.max(asNumber(min) ?? 7, next));
   return Number(clamped.toFixed(decimals));
