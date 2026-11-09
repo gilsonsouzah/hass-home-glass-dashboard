@@ -1,7 +1,7 @@
 import { CustomizationManager } from './CustomizationManager';
 import { DashboardConfig } from '../config/DashboardConfig';
 import { DashboardStateManager } from './DashboardStateManager';
-import { dimFor, gradientLuminance, wallpaperLuminance, wallpaperTone } from './wallpaperLuminance';
+import { dimFor, gradientLuminance, titleShadowFor, wallpaperLuminance, wallpaperTone } from './wallpaperLuminance';
 import { DYNAMIC_PRESET, DYNAMIC_REFRESH_MS, Phase, currentPhase, phaseBackground, phaseSky } from './dynamicBackground';
 
 const STYLE_ID = 'hg-body-background';
@@ -164,8 +164,10 @@ export class BackgroundManager {
     const root = document.documentElement;
     const tone = wallpaperTone(luminance);
     root.setAttribute('data-hg-wallpaper', tone);
-    root.style.setProperty('--hg-title-color', tone === 'light' ? 'rgba(0, 0, 0, 0.88)' : '#fff');
-    root.style.setProperty('--hg-title-shadow', 'none');
+    // Titles stay white: one average can't pick a color that works over every band of a photo.
+    // Brighter wallpapers get a stronger shadow instead.
+    root.style.setProperty('--hg-title-color', '#fff');
+    root.style.setProperty('--hg-title-shadow', titleShadowFor(luminance));
     if (root.dataset.hgSolid === 'true' || window.matchMedia?.('(prefers-reduced-transparency: reduce)').matches) return;
     root.style.setProperty('--hg-glass-dim', dimFor(luminance));
   }

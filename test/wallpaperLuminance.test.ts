@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { averageLuminance, dimFor, gradientLuminance, imageUrlOf, wallpaperTone } from '../src/utils/wallpaperLuminance.ts';
+import { averageLuminance, dimFor, gradientLuminance, imageUrlOf, titleShadowFor, wallpaperTone } from '../src/utils/wallpaperLuminance.ts';
 
 test('averageLuminance is 0 for black, 1 for white and ignores alpha', () => {
   assert.equal(averageLuminance([0, 0, 0, 255]), 0);
@@ -29,4 +29,11 @@ test('wallpaperTone switches at the threshold and dimFor grows with luminance', 
   assert.equal(wallpaperTone(0.6), 'light');
   assert.equal(dimFor(0), 'rgba(0, 0, 0, 0.20)');
   assert.equal(dimFor(1), 'rgba(0, 0, 0, 0.50)');
+});
+
+test('titleShadowFor gets stronger on brighter wallpapers and clamps', () => {
+  const alpha = (css: string) => Number(css.match(/rgba\(0, 0, 0, ([\d.]+)\)/)![1]);
+  assert.ok(alpha(titleShadowFor(0.9)) > alpha(titleShadowFor(0.2)));
+  assert.equal(titleShadowFor(5), titleShadowFor(1));
+  assert.equal(titleShadowFor(-1), titleShadowFor(0));
 });

@@ -16,5 +16,5 @@
   "issue_tracker": "https://github.com/gilsonsouzah/hass-home-glass-dashboard/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "2.0.1"
+  "version": "2.0.2"
 }

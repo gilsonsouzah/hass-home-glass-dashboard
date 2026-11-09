@@ -6,8 +6,8 @@ export const summaryStyles = `
   font-size: var(--hg-text-subhead-size);
   line-height: var(--hg-text-subhead-line);
   font-weight: var(--hg-text-subhead-weight);
-  color: var(--hg-title-color, var(--hg-label));
-  text-shadow: var(--hg-title-shadow, none);
+  color: var(--hg-title-color, #fff);
+  text-shadow: var(--hg-title-shadow, 0 1px 3px rgba(0, 0, 0, 0.35));
 }
 
 .hg-summary-list {

@@ -29,6 +29,12 @@ export function wallpaperTone(luminance: number): 'light' | 'dark' {
   return luminance >= LIGHT_THRESHOLD ? 'light' : 'dark';
 }
 
+/** Shadow behind white titles: soft on dark wallpapers, stronger on bright ones. */
+export function titleShadowFor(luminance: number): string {
+  const strength = 0.25 + 0.4 * Math.min(1, Math.max(0, luminance));
+  return `0 1px 2px rgba(0, 0, 0, ${strength.toFixed(2)}), 0 0 12px rgba(0, 0, 0, ${(strength * 0.6).toFixed(2)})`;
+}
+
 /** Black overlay strength for clear glass: brighter wallpapers get a stronger dim. */
 export function dimFor(luminance: number): string {
   return `rgba(0, 0, 0, ${(DIM_MIN + DIM_RANGE * luminance).toFixed(2)})`;
